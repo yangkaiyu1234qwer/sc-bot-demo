@@ -6,7 +6,6 @@ import bwapi.Unit;
 import bwapi.UnitType;
 import bwem.Base;
 import bwem.Mineral;
-import com.yangky.scbotdemo.util.Maths;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -110,7 +109,7 @@ public class Bases {
             List<Mineral> minerals = base.getMinerals();
             // 获取基地周围正在采集水晶的农民
             List<Unit> workers = Workers.getWorkersByMineral(e.getPlayer(), e);
-            if (workers.size() < Maths.mul(minerals.size(), 2)) {
+            if (workers.size() < 45) {
                 trainWorker(e);
             }
         });

@@ -1,5 +1,7 @@
 package com.yangky.scbotdemo.onframe;
 
+import bwapi.Player;
+import com.yangky.scbotdemo.bwem.Games;
 import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
@@ -22,6 +24,10 @@ public class OnFrameChain {
     public static void dispatch(Integer frame) {
         List<OnFrame> list = onFrames.stream().filter(e -> e.apply(frame)).collect(Collectors.toList());
         if (CollectionUtils.isEmpty(list)) {
+            return;
+        }
+        Player self = Games.game.self();
+        if (self.isNeutral() || self.isObserver() || self.isDefeated()) {
             return;
         }
         list.forEach(e -> {

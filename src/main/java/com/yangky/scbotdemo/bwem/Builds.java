@@ -1,109 +1,132 @@
 package com.yangky.scbotdemo.bwem;
 
-import bwapi.Race;
-import bwapi.TilePosition;
-import bwapi.Unit;
-import bwapi.UnitType;
+import bwapi.*;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yangky.scbotdemo.bwem.task.BuildTask;
 import com.yangky.scbotdemo.util.Positions;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.util.CollectionUtils;
 
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * 建造任务管理器
+ */
 public class Builds {
-    private static final List<BuildTask> taskList = new LinkedList<>();
+    // ✅ 改用 Caffeine 缓存，5分钟过期
+    private static final Cache<String, BuildTask> taskCache = Caffeine.newBuilder()
+            .expireAfterWrite(3, TimeUnit.MINUTES)
+            .maximumSize(200)
+            .build();
+
     private static final Object lock = new Object();
 
-    public static boolean idempotent(String idempotentNo) {
-        return taskList.stream().anyMatch(e -> StringUtils.equals(e.getIdempotentNo(), idempotentNo));
-    }
-
     public static void add(BuildTask task) {
-        System.out.println("[DEBUG] 尝试添加任务: " + task.getIdempotentNo() + ", 当前任务数: " + taskList.size());
-        // ✅ 先检查该位置是否已有建造任务
-        boolean hasTaskAtPosition = taskList.stream()
-                .anyMatch(t -> t.buildPosition.equals(task.buildPosition) && !t.submitted);
-        if (hasTaskAtPosition) {
-            System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
-            return;
-        }
-        // 先检查幂等，避免重复添加
-        if (idempotent(task.getIdempotentNo())) {
-            System.out.println("任务已存在，跳过: " + task.getIdempotentNo());
-            return;
-        }
-        System.out.println("[DEBUG] 幂等检查通过，准备分配工人");
-        // 获取一个可用的工人
-        if (task.worker == null) {
-            task.worker = Workers.getBuilderWorker(Games.game.self(), task.buildPosition.toPosition());
-            if (task.worker == null) {
-                System.out.println("没有可用工人");
+        synchronized (lock) {
+            System.out.println("[DEBUG] 尝试添加任务: " + task.getIdempotentNo() + ", 当前任务数: " + taskCache.estimatedSize());
+
+            // ✅ 幂等检查
+            if (taskCache.getIfPresent(task.getIdempotentNo()) != null) {
+                System.out.println("任务已存在，跳过: " + task.getIdempotentNo());
                 return;
             }
-            System.out.println("[DEBUG] 分配工人: " + task.worker.getID());
+
+            // ✅ 检查该位置是否已有未完成的建造任务
+            boolean hasTaskAtPosition = taskCache.asMap().values().stream()
+                    .filter(t -> !t.isCompleted())
+                    .anyMatch(t -> t.buildPosition.equals(task.buildPosition));
+
+            if (hasTaskAtPosition) {
+                System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+                return;
+            }
+
+            // 获取一个可用的工人
+            if (task.worker == null) {
+                task.worker = Workers.getBuilderWorker(Games.game.self(), task.buildPosition.toPosition());
+                if (task.worker == null) {
+                    System.out.println("没有可用工人");
+                    return;
+                }
+                System.out.println("[DEBUG] 分配工人: " + task.worker.getID());
+            }
+
+            // 再次检查幂等
+            if (taskCache.getIfPresent(task.getIdempotentNo()) != null) {
+                System.out.println("任务已存在，跳过: " + task.getIdempotentNo());
+                return;
+            }
+
+            // ✅ 再次检查位置
+            hasTaskAtPosition = taskCache.asMap().values().stream()
+                    .filter(t -> !t.isCompleted())
+                    .anyMatch(t -> t.buildPosition.equals(task.buildPosition));
+
+            if (hasTaskAtPosition) {
+                System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+                return;
+            }
+
+            taskCache.put(task.getIdempotentNo(), task);
+            Workers.markAsExperiencedBuilder(task.worker);
+            System.out.println("添加建造任务: " + task.getIdempotentNo() + " - " + task.buildingType + " by worker " + task.worker.getID() + ", 当前任务数: " + taskCache.estimatedSize());
+
+            // 如果工人携带资源，先让它返回基地放下
+            if (task.worker.isCarryingMinerals() || task.worker.isCarryingGas()) {
+                System.out.println("[DEBUG] 工人携带资源，先返回基地放下");
+                Actions.returnCargo(task.worker);
+                return;
+            }
+
+            // 使用 Actions 智能移动
+            task.worker.stop();
+            Actions.smartMove(task.worker, task.buildPosition);
         }
-        // 再次检查幂等（防止在分配工人期间被其他线程添加）
-        if (idempotent(task.getIdempotentNo())) {
-            System.out.println("任务已存在，跳过: " + task.getIdempotentNo());
-            return;
-        }
-        // ✅ 再次检查该位置是否已有建造任务（双重检查）
-        hasTaskAtPosition = taskList.stream()
-                .anyMatch(t -> t.buildPosition.equals(task.buildPosition) && !t.submitted);
-        if (hasTaskAtPosition) {
-            System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
-            return;
-        }
-        taskList.add(task);
-        Workers.markAsExperiencedBuilder(task.worker);
-        System.out.println("添加建造任务: " + task.getIdempotentNo() + " - " + task.buildingType + " by worker " + task.worker.getID() + ", 当前任务数: " + taskList.size());
-        // ✅ 如果工人携带资源，先让它返回基地放下
-        if (task.worker.isCarryingMinerals() || task.worker.isCarryingGas()) {
-            System.out.println("[DEBUG] 工人携带资源，先返回基地放下");
-            Actions.returnCargo(task.worker);
-            return;
-        }
-        // ✅ 使用 Actions 智能移动
-        task.worker.stop();
-        Actions.smartMove(task.worker, task.buildPosition);
     }
 
     public static int getCountByBuildingType(UnitType type) {
         synchronized (lock) {
-            return (int) taskList.stream().filter(e -> e.buildingType == type).count();
+            return (int) taskCache.asMap().values().stream()
+                    .filter(e -> e.buildingType == type)
+                    .filter(e -> !e.isCompleted())  // ✅ 只统计未完成的任务
+                    .count();
         }
     }
 
     public static void consume() {
         synchronized (lock) {
-            if (CollectionUtils.isEmpty(taskList)) {
+            if (taskCache.asMap().isEmpty()) {
                 return;
             }
-            // 创建副本进行遍历，避免并发修改
-            List<BuildTask> snapshot = new LinkedList<>(taskList);
-            snapshot.forEach(Builds::processTask);
+            // ✅ 只处理未完成的任务
+            List<BuildTask> activeTasks = taskCache.asMap().values().stream()
+                    .filter(task -> !task.isCompleted())
+                    .collect(Collectors.toList());
+            activeTasks.forEach(Builds::processTask);
         }
     }
 
     private static void processTask(BuildTask task) {
         if (task.isExpired()) {
-            System.out.println("建造任务超时取消");
+            System.out.println("建造任务超时取消: " + task.getIdempotentNo());
             removeTask(task);
             return;
         }
-        if (task.submitted) {
+
+        if (task.isSubmitted()) {
             checkBuildCompletion(task);
             return;
         }
-        // ✅ 如果工人还在携带资源，等待它放下
+
+        // 如果工人还在携带资源，等待它放下
         if (task.worker.isCarryingMinerals() || task.worker.isCarryingGas()) {
             return;
         }
+
         moveToBuildPosition(task);
+
         if (canBuild(task)) {
             tryBuild(task);
         } else if (task.worker.isIdle()) {
@@ -114,9 +137,8 @@ public class Builds {
     private static void moveToBuildPosition(BuildTask task) {
         int distance = task.worker.getDistance(task.buildPosition.toPosition());
 
-        // ✅ 检测是否卡住：距离很近但无法建造
+        // 检测是否卡住：距离很近但无法建造
         if (distance <= 8 && !canBuild(task)) {
-            // ✅ 可能是被其他单位临时挡住，强制重新移动
             if (task.worker.isIdle()) {
                 System.out.println("[DEBUG] 工人可能卡住，强制重新移动: " + task.getIdempotentNo());
                 Actions.forceMove(task.worker, task.buildPosition.toPosition());
@@ -130,15 +152,14 @@ public class Builds {
         }
     }
 
-
     private static boolean canBuild(BuildTask task) {
-        // ✅ 先检查资源是否足够
+        // 先检查资源是否足够
         if (task.worker.getPlayer().minerals() < task.buildingType.mineralPrice()
                 || task.worker.getPlayer().gas() < task.buildingType.gasPrice()) {
             return false;
         }
 
-        // ✅ 使用 TilePosition 直接判断格子距离，而不是像素距离
+        // 使用 TilePosition 直接判断格子距离
         TilePosition workerTile = task.worker.getTilePosition();
         int tileDistanceX = Math.abs(workerTile.getX() - task.buildPosition.getX());
         int tileDistanceY = Math.abs(workerTile.getY() - task.buildPosition.getY());
@@ -150,13 +171,14 @@ public class Builds {
     private static void tryBuild(BuildTask task) {
         System.out.println("建造" + task.buildingType + "，工人空闲：" + task.worker.isIdle()
                 + "，位置: " + task.worker.getTilePosition() + " -> " + task.buildPosition);
-        // ✅ 堵口任务使用宽松验证（只检查地图边界和地形）
+
+        // 堵口任务使用宽松验证
         boolean isWallOff = task.getIdempotentNo().startsWith("first") ||
                 task.getIdempotentNo().contains("bunker") ||
                 task.getIdempotentNo().contains("barracks") ||
                 task.getIdempotentNo().contains("wall");
+
         if (isWallOff) {
-            // 堵口建筑：只检查基本可建造性
             if (!Games.isBuildable(task.buildPosition)) {
                 System.out.println("[ERROR] 堵口位置地形不可建造");
                 Positions.markFailedPosition(task.buildPosition);
@@ -165,7 +187,6 @@ public class Builds {
                 return;
             }
         } else {
-            // 普通建筑：使用完整验证
             if (!LocationValidator.isValid(task.buildPosition, task.buildingType)) {
                 System.out.println("[ERROR] 位置验证失败");
                 Positions.markFailedPosition(task.buildPosition);
@@ -177,7 +198,7 @@ public class Builds {
 
         if (task.worker.build(task.buildingType, task.buildPosition)) {
             System.out.println("成功下达建造命令");
-            task.submitted = true;
+            task.setSubmitted(true);
         } else {
             System.out.println("建造命令失败，放弃任务...");
 
@@ -191,20 +212,21 @@ public class Builds {
                     + ", 资源: " + task.worker.getPlayer().minerals() + "/" + task.buildingType.mineralPrice());
 
             Positions.markFailedPosition(task.buildPosition);
-
             task.worker.stop();
             removeTask(task);
         }
     }
 
-
     public static List<Unit> getBuildingWorkers() {
-        return taskList.stream().map(e -> e.worker).collect(Collectors.toList());
+        return taskCache.asMap().values().stream()
+                .filter(task -> !task.isCompleted())
+                .map(BuildTask::getWorker)
+                .collect(Collectors.toList());
     }
 
     private static void removeTask(BuildTask task) {
-        taskList.remove(task);
-        System.out.println("移除建造任务: " + task.getIdempotentNo() + ", 剩余任务数: " + taskList.size());
+        taskCache.invalidate(task.getIdempotentNo());
+        System.out.println("移除建造任务: " + task.getIdempotentNo() + ", 剩余任务数: " + taskCache.estimatedSize());
     }
 
     private static Unit findBuildingAtPosition(TilePosition position, UnitType type) {
@@ -220,7 +242,7 @@ public class Builds {
     }
 
     private static void checkBuildCompletion(BuildTask task) {
-        // ✅ 直接查找建筑，根据建筑状态判断
+        // 直接查找建筑，根据建筑状态判断
         Unit building = findBuildingAtPosition(task.buildPosition, task.buildingType);
         if (building == null) {
             // 建筑不存在
@@ -232,84 +254,88 @@ public class Builds {
             // 工人也不在建造，可能建造失败
             System.out.println("建筑不存在且工人未建造，重试...");
             task.worker.stop();
-            task.submitted = false;
+            task.setSubmitted(false);
             return;
         }
-
         // 建筑已完成
         if (building.isCompleted()) {
             System.out.println("建筑已完成: " + task.getIdempotentNo());
             // ✅ 标记为有经验建筑师，并让它回到基地附近
+            Workers.markAsExperiencedBuilder(task.worker);
             Workers.returnToBaseArea(task.worker);
             // 执行回调（如果有）
             if (Objects.nonNull(task.callback)) {
                 System.out.println("执行回调: " + task.getIdempotentNo());
                 task.callback.execute();
             }
-            // 移除任务
-            removeTask(task);
+            // ✅ 标记任务为完成（而不是立即删除，让缓存自动清理）
+            task.setCompleted(true);
             return;
         }
-
-        // 建筑正在建造中
-        if (building.isBeingConstructed()) {
-            return;
-        }
-
         // 建筑存在但未开始建造（可能是被打断）
+        if (building.getHitPoints() > 0) {
+            // 建筑已经有血量，说明正在建造中
+
+            // ✅ 检查当前任务的工人是否还在修
+            if (task.worker != null && task.worker.exists()) {
+                Order order = task.worker.getOrder();
+                if (order == Order.ConstructingBuilding ||
+                        order == Order.ResetCollision) {
+                    // 工人正在修，不需要干预
+                    return;
+                }
+            }
+
+            // ✅ 只有当任务没有工人，或工人已死亡/转行时，才分配新工人
+            if (task.worker == null || !task.worker.exists() || !isRepairing(task.worker)) {
+                Unit worker = Workers.getBuilderWorker(building.getPlayer(), building.getPosition());
+                if (worker != null) {
+                    task.setWorker(worker);
+                    task.setSubmitted(true);
+                    worker.rightClick(building);
+                    System.out.println("[DEBUG] 重新分配工人维修建筑: " + worker.getID());
+                }
+            }
+            return;
+        }
+
         System.out.println("建筑存在但未建造，重试...");
         if (building.getPlayer().getRace() == Race.Terran) {
-            // 建筑存在但未开始建造（可能是被打断）
-            if (building.getHitPoints() > 0) {
-                // 建筑已经有血量，说明正在建造中，只是工人暂时没在修
-                // 不需要重新分配工人，等待下一帧即可
-                Unit worker = Workers.getBuilderWorker(building.getPlayer(), building.getPosition());
-                task.worker = worker;
-                task.submitted = true;
-                worker.rightClick(building);
-                return;
-            }
-            System.out.println("建筑存在但未建造，重试...");
-            if (building.getPlayer().getRace() == Race.Terran) {
-                retryWithNewWorker(task);
-            } else {
-                task.worker.stop();
-                task.submitted = false;
-            }
+            retryWithNewWorker(task);
         } else {
             task.worker.stop();
-            task.submitted = false;
-        }
-    }
-
-    private static void retryWithNewWorker(BuildTask task) {
-        System.out.println("人族建造被打断，重新分配工人继续建造");
-        Unit newWorker = Workers.getBuilderWorker(task.worker.getPlayer(), task.buildPosition.toPosition());
-
-        if (newWorker != null) {
-            task.worker.stop();
-            task.worker = newWorker;
-            task.submitted = false;
-            System.out.println("已分配新工人 ID: " + newWorker.getID());
-        } else {
-            System.out.println("没有可用工人，等待下次重试");
+            task.setSubmitted(false);
         }
     }
 
     /**
-     * 清理所有建造任务
+     * 判断工人是否正在维修建筑
      */
-    public static void clearAll() {
-        synchronized (lock) {
-            taskList.clear();
+    private static boolean isRepairing(Unit worker) {
+        bwapi.Order order = worker.getOrder();
+        return order == Order.ConstructingBuilding || order == bwapi.Order.ResetCollision;
+    }
+
+    private static void retryWithNewWorker(BuildTask task) {
+        System.out.println("人族建造被打断，重新分配工人继续建造");
+        Unit newWorker = Workers.getBuilderWorker(Games.game.self(), task.buildPosition.toPosition());
+        if (newWorker != null) {
+            System.out.println("已分配新工人 ID: " + newWorker.getID());
+            task.setWorker(newWorker);
+            task.setSubmitted(false);
+        } else {
+            System.out.println("没有可用工人，等待下一帧");
         }
     }
 
     public static BuildTask getTaskByIdempotent(String idempotentNo) {
-        return taskList.stream()
+        return taskCache.asMap().values().stream()
                 .filter(t -> t.getIdempotentNo().equals(idempotentNo))
                 .findFirst()
                 .orElse(null);
     }
 
+    public static void clearAll() {
+        taskCache.cleanUp();
+    }
 }

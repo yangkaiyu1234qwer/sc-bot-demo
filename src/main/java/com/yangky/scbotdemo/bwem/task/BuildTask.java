@@ -4,7 +4,9 @@ import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.Callback;
+import lombok.Data;
 import lombok.Getter;
+import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -13,9 +15,9 @@ import org.apache.commons.lang3.StringUtils;
  * @author yangky
  * @Date 2026/4/28 8:55
  */
+@Data
 public class BuildTask {
     // 幂等编号
-    @Getter
     private final String idempotentNo;
     public Unit worker;
     public TilePosition buildPosition;
@@ -23,6 +25,7 @@ public class BuildTask {
     public long startTime;
     public boolean submitted = false;
     public Callback callback;
+    private boolean completed;
 
     public Boolean isTheSame(BuildTask task) {
         return StringUtils.equals(task.idempotentNo, idempotentNo);

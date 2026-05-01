@@ -146,7 +146,7 @@ public class WallOffExecutor {
                 if (completedBuildings.contains(e.getIdempotentNo())) {
                     return;
                 }
-                if (!Builds.idempotent(e.getIdempotentNo()) && e.getBuildTiming().accept(Games.game)) {
+                if (Builds.getTaskByIdempotent(e.getIdempotentNo()) == null && e.getBuildTiming().accept(Games.game)) {
                     System.out.println("建造堵口建筑: " + e.getIdempotentNo() + " - " + e.getUnitType() + " at " + e.getTilePosition());
                     BuildTask task = new BuildTask(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
                         if (e.getCallback() != null) {

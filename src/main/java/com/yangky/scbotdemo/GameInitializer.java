@@ -85,6 +85,8 @@ public class GameInitializer {
             initialized = true;
             System.out.println("BWEM 初始化成功！");
             setupInitialGame();
+            List<Unit> units = game.self().getUnits();
+            units.forEach(Units::unitCreated);
         } catch (IllegalStateException e) {
             System.err.println("BWEM 初始化失败: " + e.getMessage());
             System.err.println("当前地图不支持 BWEM，BOT 停止运行");
