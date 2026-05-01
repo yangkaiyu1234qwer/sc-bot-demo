@@ -1,0 +1,29 @@
+package com.yangky.scbotdemo.onframe;
+
+import org.springframework.util.CollectionUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * OnFrameChain
+ *
+ * @author yangky
+ * @Date 2026/4/28 4:20
+ */
+public class OnFrameChain {
+    private static final List<OnFrame> onFrames = new ArrayList<>();
+
+    public static void addOnFrame(OnFrame onFrame) {
+        onFrames.add(onFrame);
+    }
+
+    public static void dispatch(Integer frame) {
+        List<OnFrame> list = onFrames.stream().filter(e -> e.apply(frame)).collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(list)) {
+            return;
+        }
+        list.forEach(e -> e.onFrame(frame));
+    }
+}
