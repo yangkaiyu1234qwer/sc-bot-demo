@@ -259,7 +259,23 @@ public class Builds {
         // 建筑存在但未开始建造（可能是被打断）
         System.out.println("建筑存在但未建造，重试...");
         if (building.getPlayer().getRace() == Race.Terran) {
-            retryWithNewWorker(task);
+            // 建筑存在但未开始建造（可能是被打断）
+            if (building.getHitPoints() > 0) {
+                // 建筑已经有血量，说明正在建造中，只是工人暂时没在修
+                // 不需要重新分配工人，等待下一帧即可
+                Unit worker = Workers.getBuilderWorker(building.getPlayer(), building.getPosition());
+                task.worker = worker;
+                task.submitted = true;
+                worker.rightClick(building);
+                return;
+            }
+            System.out.println("建筑存在但未建造，重试...");
+            if (building.getPlayer().getRace() == Race.Terran) {
+                retryWithNewWorker(task);
+            } else {
+                task.worker.stop();
+                task.submitted = false;
+            }
         } else {
             task.worker.stop();
             task.submitted = false;

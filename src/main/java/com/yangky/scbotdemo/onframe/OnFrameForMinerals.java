@@ -44,6 +44,7 @@ public class OnFrameForMinerals extends OnFrame {
         List<Unit> workersOnBuilding = Builds.getBuildingWorkers();
         List<Unit> idleWorkers = self.getUnits().stream()
                 .filter(e -> e.getType().isWorker() && e.isIdle())
+                .filter(e -> !Workers.isBuilder(e))
                 .collect(Collectors.toList());
         idleWorkers = idleWorkers.stream().filter(e -> !workersOnBuilding.contains(e)).collect(Collectors.toList());
         idleWorkers.forEach(e -> {

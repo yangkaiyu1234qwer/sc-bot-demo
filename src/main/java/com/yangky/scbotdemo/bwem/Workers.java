@@ -36,6 +36,11 @@ public class Workers {
         }
     }
 
+    // 判断是否是建筑工人
+    public static boolean isBuilder(Unit worker) {
+        return experiencedBuilders.contains(worker);
+    }
+
     public static int getWeightToChooseForBuild(Position buildPosition, Unit worker) {
         int weight = 0;
 
@@ -177,6 +182,10 @@ public class Workers {
     public static void goGatherLessLoader(Unit worker, Unit base) {
         Unit mineral = getClosestMineralsLessWorkers(worker, base);
         if (mineral != null) {
+            // ✅ 跳过有建造经验的 SCV（让它们专门负责建造/维修）
+            if (experiencedBuilders.contains(worker)) {
+                return;
+            }
             worker.gather(mineral);
             Set<Unit> gatheringWorkers = getGatheringWorkersByMineral(mineral);
             gatheringWorkers.add(worker);
@@ -189,10 +198,6 @@ public class Workers {
      */
     public static void goGatherLessLoader(List<Unit> workers, Unit base) {
         workers.forEach(e -> {
-            // ✅ 跳过有建造经验的 SCV（让它们专门负责建造/维修）
-            if (experiencedBuilders.contains(e)) {
-                return;
-            }
             goGatherLessLoader(e, base);
         });
     }

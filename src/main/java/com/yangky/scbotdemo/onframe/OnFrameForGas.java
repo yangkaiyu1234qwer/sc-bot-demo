@@ -10,7 +10,7 @@ import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
 import com.yangky.scbotdemo.bwem.task.BuildTask;
-import lombok.Data;
+import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
 import java.util.HashSet;
@@ -23,7 +23,7 @@ import java.util.Set;
  * @author yangky
  * @Date 2026/5/1
  */
-@Data
+@Component
 public class OnFrameForGas extends OnFrame {
 
     // ✅ 记录已经分配去采气的 SCV
@@ -36,11 +36,11 @@ public class OnFrameForGas extends OnFrame {
 
     @Override
     public void onFrame(Integer frame) {
-        if (frame < 1000) {
+        if (frame < 2000) {
             return;
         }
         Player self = Games.game.self();
-        if (self.isNeutral() || self.isObserver() || self.isDefeated() || self.supplyUsed() < 12) {
+        if (self.isNeutral() || self.isObserver() || self.isDefeated() || self.supplyUsed() < 28) {
             return;
         }
         // ✅ 清理已死亡或不再采气的 SCV

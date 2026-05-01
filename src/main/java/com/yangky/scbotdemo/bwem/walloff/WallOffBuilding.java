@@ -38,6 +38,7 @@ public class WallOffBuilding {
         wallOffBuilding.idempotentNo = "firstBarrack";
         return wallOffBuilding;
     }
+
     public static WallOffBuilding bunker(TilePosition tilePosition) {
         WallOffBuilding wallOffBuilding = new WallOffBuilding(UnitType.Terran_Bunker, tilePosition, WallOffBuilding::bunkerTiming);
         wallOffBuilding.idempotentNo = "firstBunker";
@@ -94,7 +95,8 @@ public class WallOffBuilding {
 //                + "，bunkersBuilding=" + barrackExisted);
         return supplyUsed >= 20               // 10 人口 造第一个兵营
                 && barracksBuilding < 1// 没有正在建造的兵营
-                && barrackExisted < 1;
+                && barrackExisted < 1
+                && game.self().minerals() > 110;
     }
 
     private static boolean bunkerTiming(Game game) {
