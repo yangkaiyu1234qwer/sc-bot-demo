@@ -27,6 +27,14 @@ public class Workers {
     // 计时缓存来记录水晶与对应工人的关联关系，以优化后续分配
     private static final Cache<Unit, Set<Unit>> mineralWorkerCache = Caffeine.newBuilder().expireAfterWrite(3, TimeUnit.MINUTES).build();
 
+    private static final Set<Unit> experiencedBuilders = new HashSet<>();
+
+    // 建筑完成时标记
+    public static void markAsExperiencedBuilder(Unit worker) {
+        if (worker != null) {
+            experiencedBuilders.add(worker);
+        }
+    }
 
     public static int getWeightToChooseForBuild(Position buildPosition, Unit worker) {
         int weight = 0;
@@ -55,6 +63,89 @@ public class Workers {
         return base.getUnitsInRadius(12, (e) -> e.getType().isWorker() && e.isGatheringMinerals() && e.getPlayer().equals(player));
     }
 
+    public static Unit getBuilderWorker(Player player, Position target) {
+        Unit bestBuilder = null;
+        int bestDist = Integer.MAX_VALUE;
+        // 第 1 步：从有经验的 SCV 中找最近的、可达的
+        for (Unit scv : experiencedBuilders) {
+            if (scv == null || !scv.exists() || !scv.isIdle()) {
+                continue;
+            }
+            // 检查可达性（距离基地 <= 20 格）
+            if (!isReachable(scv)) {
+                continue;
+            }
+            int dist = scv.getTilePosition().getApproxDistance(target.toTilePosition());
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestBuilder = scv;
+            }
+        }
+        // 如果找到合适的有经验 SCV，返回
+        if (bestBuilder != null && bestDist <= 30) {
+            return bestBuilder;
+        }
+        // 第 2 步：降级到普通工人
+        return getAWorker(player, target);
+    }
+
+    private static boolean isReachable(Unit scv) {
+        Unit mainBase = Bases.getMainBaseUnit();
+        if (mainBase == null) return true;
+        int distToBase = scv.getTilePosition().getApproxDistance(mainBase.getTilePosition());
+        return distToBase <= 20;  // 20 格以内认为可达
+    }
+
+    /**
+     * 让 SCV 回到基地附近（5-10 格范围内）
+     */
+    public static void returnToBaseArea(Unit worker) {
+        if (worker == null || !worker.exists()) {
+            return;
+        }
+
+        Unit mainBase = Bases.getMainBaseUnit();
+        if (mainBase == null) {
+            return;
+        }
+
+        int distToBase = worker.getTilePosition().getApproxDistance(mainBase.getTilePosition());
+
+        // 如果已经在 5-10 格范围内，不需要移动
+        if (distToBase >= 5 && distToBase <= 10) {
+            return;
+        }
+
+        // 计算朝向基地的方向点（在基地 8 格距离）
+        Position target = calculateDirectionTowardsBase(worker, mainBase);
+        worker.rightClick(target);
+    }
+
+    /**
+     * 计算朝向基地的方向点
+     */
+    private static Position calculateDirectionTowardsBase(Unit worker, Unit base) {
+        Position workerPos = worker.getPosition();
+        Position basePos = base.getPosition();
+
+        // 计算从工人到基地的向量
+        double dx = basePos.getX() - workerPos.getX();
+        double dy = basePos.getY() - workerPos.getY();
+        double distance = Math.sqrt(dx * dx + dy * dy);
+
+        // 避免除以 0
+        if (distance == 0) {
+            return basePos;
+        }
+
+        // 归一化后，缩放到 8 格（256 像素）的距离
+        int targetDist = 8 * 32;  // 8 格 = 256 像素
+        int targetX = workerPos.getX() + (int) (dx / distance * targetDist);
+        int targetY = workerPos.getY() + (int) (dy / distance * targetDist);
+
+        return new Position(targetX, targetY);
+    }
+
     /**
      * 获取一个工人用来建造或者干别的
      */
@@ -65,6 +156,7 @@ public class Workers {
                 .stream()
                 .filter(e -> e.getType().isWorker() && !e.isConstructing())
                 .filter(e -> !Builds.getBuildingWorkers().contains(e))  //排除建造任务中的工人
+                .filter(e -> !e.isGatheringGas() || e.isCarryingGas())
                 .sorted(Comparator.comparingInt(o -> Workers.getWeightToChooseForBuild(position, o)))
                 .collect(Collectors.toList());
         if (CollectionUtils.isEmpty(workers)) {
@@ -97,6 +189,10 @@ public class Workers {
      */
     public static void goGatherLessLoader(List<Unit> workers, Unit base) {
         workers.forEach(e -> {
+            // ✅ 跳过有建造经验的 SCV（让它们专门负责建造/维修）
+            if (experiencedBuilders.contains(e)) {
+                return;
+            }
             goGatherLessLoader(e, base);
         });
     }
@@ -172,11 +268,24 @@ public class Workers {
         return Double.parseDouble(getGatheringWorkersByMineral(mineral).size() + "." + mineral.getDistance(position));
     }
 
+    // 维修时优先用有经验的 SCV
+    public static Unit getRepairWorker(Player player, Unit damagedBuilding) {
+        // 优先从有经验的 SCV 中找
+        for (Unit scv : experiencedBuilders) {
+            if (scv != null && scv.exists() && scv.isIdle()) {
+                return scv;  // 即使被堵在外面，也可以修附近的建筑
+            }
+        }
+        // 没有合适的，用普通工人
+        return getBuilderWorker(player, damagedBuilding.getPosition());
+    }
+
     /**
      * 清理工人分配缓存
      */
     public static void clearCache() {
         mineralWorkerCache.invalidateAll();
+        experiencedBuilders.clear();
     }
 
 }

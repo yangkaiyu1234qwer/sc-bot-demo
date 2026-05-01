@@ -39,7 +39,7 @@ public class Builds {
         System.out.println("[DEBUG] 幂等检查通过，准备分配工人");
         // 获取一个可用的工人
         if (task.worker == null) {
-            task.worker = Workers.getAWorker(Games.game.self(), task.buildPosition.toPosition());
+            task.worker = Workers.getBuilderWorker(Games.game.self(), task.buildPosition.toPosition());
             if (task.worker == null) {
                 System.out.println("没有可用工人");
                 return;
@@ -59,6 +59,7 @@ public class Builds {
             return;
         }
         taskList.add(task);
+        Workers.markAsExperiencedBuilder(task.worker);
         System.out.println("添加建造任务: " + task.getIdempotentNo() + " - " + task.buildingType + " by worker " + task.worker.getID() + ", 当前任务数: " + taskList.size());
         // ✅ 如果工人携带资源，先让它返回基地放下
         if (task.worker.isCarryingMinerals() || task.worker.isCarryingGas()) {
@@ -238,6 +239,8 @@ public class Builds {
         // 建筑已完成
         if (building.isCompleted()) {
             System.out.println("建筑已完成: " + task.getIdempotentNo());
+            // ✅ 标记为有经验建筑师，并让它回到基地附近
+            Workers.returnToBaseArea(task.worker);
             // 执行回调（如果有）
             if (Objects.nonNull(task.callback)) {
                 System.out.println("执行回调: " + task.getIdempotentNo());
@@ -265,7 +268,7 @@ public class Builds {
 
     private static void retryWithNewWorker(BuildTask task) {
         System.out.println("人族建造被打断，重新分配工人继续建造");
-        Unit newWorker = Workers.getAWorker(task.worker.getPlayer(), task.buildPosition.toPosition());
+        Unit newWorker = Workers.getBuilderWorker(task.worker.getPlayer(), task.buildPosition.toPosition());
 
         if (newWorker != null) {
             task.worker.stop();
