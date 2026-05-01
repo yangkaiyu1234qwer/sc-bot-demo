@@ -24,6 +24,12 @@ public class OnFrameChain {
         if (CollectionUtils.isEmpty(list)) {
             return;
         }
-        list.forEach(e -> e.onFrame(frame));
+        list.forEach(e -> {
+            try {
+                e.onFrame(frame);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
     }
 }

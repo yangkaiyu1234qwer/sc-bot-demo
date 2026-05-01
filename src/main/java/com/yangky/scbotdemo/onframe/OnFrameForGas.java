@@ -27,7 +27,7 @@ public class OnFrameForGas extends OnFrame {
             return;
         }
         Player self = Games.game.self();
-        if (self.isNeutral() || self.isObserver() || self.isDefeated() || self.supplyUsed() < 32) {
+        if (self.isNeutral() || self.isObserver() || self.isDefeated() || self.supplyUsed() < 36) {
             return;
         }
         List<Unit> bases = Bases.getBaseCenterList(self);

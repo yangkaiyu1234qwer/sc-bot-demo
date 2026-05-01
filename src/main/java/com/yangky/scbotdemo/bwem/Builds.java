@@ -152,6 +152,7 @@ public class Builds {
         // ✅ 堵口任务使用宽松验证（只检查地图边界和地形）
         boolean isWallOff = task.getIdempotentNo().startsWith("first") ||
                 task.getIdempotentNo().contains("bunker") ||
+                task.getIdempotentNo().contains("barracks") ||
                 task.getIdempotentNo().contains("wall");
         if (isWallOff) {
             // 堵口建筑：只检查基本可建造性

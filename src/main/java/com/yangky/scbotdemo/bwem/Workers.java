@@ -86,7 +86,6 @@ public class Workers {
         Unit mineral = getClosestMineralsLessWorkers(worker, base);
         if (mineral != null) {
             worker.gather(mineral);
-            System.out.println("分配农民:" + worker + "去采集:" + mineral.getTilePosition() + " " + mineral.getType());
             Set<Unit> gatheringWorkers = getGatheringWorkersByMineral(mineral);
             gatheringWorkers.add(worker);
             mineralWorkerCache.put(mineral, gatheringWorkers);

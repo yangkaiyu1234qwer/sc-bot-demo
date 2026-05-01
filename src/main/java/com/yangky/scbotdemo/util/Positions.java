@@ -81,19 +81,27 @@ public class Positions {
                     + ", 距基地=" + distFromBase);
         }
         if (LocationValidator.isValid(result, building)) {
-            log("[EdgeZone] ✓ 验证通过，选择位置: " + result);
-            return result;
+            if (isReachableFromBase(base, result)) {
+                log("[EdgeZone] ✓ 验证通过，选择位置: " + result);
+                return result;
+            } else {
+                log("[EdgeZone] 位置不可达，尝试其他候选: " + result);
+            }
         }
         log("[EdgeZone] 验证失败，尝试其他候选");
         for (TilePosition candidate : candidates) {
             if (!candidate.equals(result) && LocationValidator.isValid(candidate, building)) {
-                int distToEdge = getDistanceToEdge(candidate.getX(), candidate.getY(),
-                        Games.game.mapWidth(), Games.game.mapHeight());
-                int distFromBase = basePos.getApproxDistance(candidate);
-                log("[EdgeZone] ✓ 选择备选位置: " + candidate
-                        + ", 距边缘=" + distToEdge
-                        + ", 距基地=" + distFromBase);
-                return candidate;
+                if (isReachableFromBase(base, candidate)) {
+                    int distToEdge = getDistanceToEdge(candidate.getX(), candidate.getY(),
+                            Games.game.mapWidth(), Games.game.mapHeight());
+                    int distFromBase = basePos.getApproxDistance(candidate);
+                    log("[EdgeZone] ✓ 选择备选位置: " + candidate
+                            + ", 距边缘=" + distToEdge
+                            + ", 距基地=" + distFromBase);
+                    return candidate;
+                } else {
+                    log("[EdgeZone] 备选位置不可达: " + candidate);
+                }
             }
         }
         // 尝试扩大搜索范围重新生成候选
@@ -125,9 +133,51 @@ public class Positions {
         return false;
     }
 
+
+    // ... existing code ...
+
     private static boolean isReachableFromBase(Unit base, TilePosition target) {
-        // 简单检查：目标位置距离基地不要太远（30 格以内）
-        return base.getTilePosition().getApproxDistance(target) <= 30;
+        if (base == null || target == null) {
+            return false;
+        }
+        int distance = base.getTilePosition().getApproxDistance(target);
+        if (distance > 30) {
+            return false;
+        }
+        // ✅ 检查是否紧贴地图边缘
+        int mapWidth = Games.game.mapWidth();
+        int mapHeight = Games.game.mapHeight();
+        boolean isOnEdge = target.getX() <= 2 || target.getX() >= mapWidth - 3 ||
+                target.getY() <= 2 || target.getY() >= mapHeight - 3;
+        if (isOnEdge) {
+            // 如果在边缘，检查是否有足够的空间让 SCV 接近
+            int accessibleNeighbors = 0;
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    TilePosition neighbor = new TilePosition(target.getX() + dx, target.getY() + dy);
+                    if (isInMap(neighbor) && Games.isBuildable(neighbor)) {
+                        accessibleNeighbors++;
+                    }
+                }
+            }
+            // 如果周围可通行的格子少于 5 个，说明是死角
+            if (accessibleNeighbors < 5) {
+                return false;
+            }
+        }
+        // 检查目标位置周围是否有通路
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                if (dx == 0 && dy == 0) continue;
+
+                TilePosition neighbor = new TilePosition(target.getX() + dx, target.getY() + dy);
+                if (isInMap(neighbor) && Games.isBuildable(neighbor)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -429,7 +479,14 @@ public class Positions {
         int mapHeight = Games.game.mapHeight();
         for (TilePosition pos : candidates) {
             int distToEdge = getDistanceToEdge(pos.getX(), pos.getY(), mapWidth, mapHeight);
+            // ✅ 基础权重：距离边缘越远越好
             double weight = preferOuter ? 1.0 / (distToEdge + 1) : 1.0;
+            // ✅ 惩罚因子：紧贴边缘的位置权重大幅降低
+            if (distToEdge == 0) {
+                weight *= 0.3;  // 大幅降低权重（70% 惩罚）
+            } else if (distToEdge == 1) {
+                weight *= 0.6;  // 适度降低权重（40% 惩罚）
+            }
             weights.put(pos, weight);
         }
         return weightedRandomSelect(weights);
@@ -442,18 +499,15 @@ public class Positions {
         if (candidates.isEmpty()) {
             return null;
         }
-
         if (candidates.size() == 1) {
             return candidates.get(0);
         }
-
         Map<TilePosition, Double> weights = new HashMap<>();
         for (TilePosition pos : candidates) {
             int distToBase = basePos.getApproxDistance(pos);
             double weight = 1.0 / (distToBase + 1);
             weights.put(pos, weight);
         }
-
         return weightedRandomSelect(weights);
     }
 
@@ -574,4 +628,5 @@ public class Positions {
             log("[Positions] 标记失败位置: " + posKey);
         }
     }
+
 }

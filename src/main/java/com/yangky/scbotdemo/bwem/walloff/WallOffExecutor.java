@@ -108,7 +108,7 @@ public class WallOffExecutor {
         rescueWaitFrames++;
         if (rescueWaitFrames >= 10) {//frame本身已经有帧数限制
             if (rescueBarracks.exists() && rescueBarracks.isFlying() && barracksLandPosition != null) {
-                rescueBarracks.cancelTrain();
+                if (!rescueBarracks.isIdle()) rescueBarracks.cancelTrain();
                 if (rescueBarracks.land(barracksLandPosition)) {
                     System.out.println("[救援] 兵营降落至: " + barracksLandPosition);
                 }
@@ -163,7 +163,6 @@ public class WallOffExecutor {
             Unit firstBarracks = barracks.iterator().next();
             if (firstBarracks.isIdle() && Units.getSelfUnits(UnitType.Terran_Marine).size() < 4) {
                 firstBarracks.train(UnitType.Terran_Marine);
-                System.out.println("[生产] 训练枪兵，当前数量: " + Units.getSelfUnits(UnitType.Terran_Marine).size());
             }
         }
         Unit bunker = findNearestBunkerWithSpace();

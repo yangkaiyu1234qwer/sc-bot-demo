@@ -104,7 +104,7 @@ public class LocationValidator {
      * 排除范围：建筑占据区域向外扩展2格
      */
     private static boolean hasNoResourcesNearby(TilePosition pos, UnitType building) {
-        int checkRange = 2;
+        int checkRange = 1;
         int buildWidth = building.tileWidth();
         int buildHeight = building.tileHeight();
         for (int dx = -checkRange; dx <= buildWidth + checkRange; dx++) {
