@@ -50,7 +50,6 @@ public class LocationValidator {
             System.out.println("[LocationValidator] 有建筑占用: " + pos);
             return false;
         }
-
         return true;
     }
 

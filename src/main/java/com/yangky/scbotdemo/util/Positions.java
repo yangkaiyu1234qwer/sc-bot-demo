@@ -359,7 +359,7 @@ public class Positions {
         List<TilePosition> edgeSorted = edgeTiles.stream()
                 .sorted(Comparator.comparingInt(e -> -e.getApproxDistance(basePos))).collect(Collectors.toList());
         Set<Unit> existingAAs = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
-        int minSpacing = 5; // 间隔7格
+        int minSpacing = 5; // 间隔5格
         for (TilePosition pos : edgeSorted) {
             // 基础验证
             if (!isCandidateValid(pos, UnitType.Terran_Missile_Turret, basePos, null)) {

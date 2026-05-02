@@ -36,19 +36,19 @@ public class OnFrameForLocation extends OnFrame {
             Locations.initialize();
             return;
         }
-        // 添加调试信息
-        int mapSize = Locations.getLocationMap().size();
-        if (mapSize == 0) {
-            if (frameCount <= 5) {
-                System.out.println("[LocationDebug] 警告：locationMap为空，无法绘制");
-            }
-            return;
-        }
-        drawLocationDebug();
-        // 暂时不设置drawn = true，让每帧都绘制
-        if (frameCount == 1) {
-            System.out.println("[LocationDebug] 调试信息已绘制完成（仅首次输出）");
-        }
+//        // 添加调试信息
+//        int mapSize = Locations.getLocationMap().size();
+//        if (mapSize == 0) {
+//            if (frameCount <= 5) {
+//                System.out.println("[LocationDebug] 警告：locationMap为空，无法绘制");
+//            }
+//            return;
+//        }
+//        drawLocationDebug();
+//        // 暂时不设置drawn = true，让每帧都绘制
+//        if (frameCount == 1) {
+//            System.out.println("[LocationDebug] 调试信息已绘制完成（仅首次输出）");
+//        }
     }
 
     private void drawLocationDebug() {

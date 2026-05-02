@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class Builds {
     // ✅ 改用 Caffeine 缓存，5分钟过期
     private static final Cache<String, BuildTask> taskCache = Caffeine.newBuilder()
-            .expireAfterWrite(3, TimeUnit.MINUTES)
+            .expireAfterWrite(2, TimeUnit.MINUTES)
             .maximumSize(200)
             .build();
 
@@ -34,12 +34,17 @@ public class Builds {
             }
 
             // ✅ 检查该位置是否已有未完成的建造任务
-            boolean hasTaskAtPosition = taskCache.asMap().values().stream()
+            BuildTask taskAtPosition = taskCache.asMap().values().stream()
                     .filter(t -> !t.isCompleted())
-                    .anyMatch(t -> t.buildPosition.equals(task.buildPosition));
+                    .filter(t -> t.buildPosition.equals(task.buildPosition))
+                    .findFirst().orElse(null);
 
-            if (hasTaskAtPosition) {
-                System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+            if (taskAtPosition != null) {
+                if (taskAtPosition.buildingType == task.buildingType) {
+                    System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+                } else {
+                    task.setBuildPosition(Games.game.getBuildLocation(task.buildingType, task.buildPosition, 15));
+                }
                 return;
             }
 
@@ -60,12 +65,17 @@ public class Builds {
             }
 
             // ✅ 再次检查位置
-            hasTaskAtPosition = taskCache.asMap().values().stream()
+            taskAtPosition = taskCache.asMap().values().stream()
                     .filter(t -> !t.isCompleted())
-                    .anyMatch(t -> t.buildPosition.equals(task.buildPosition));
+                    .filter(t -> t.buildPosition.equals(task.buildPosition))
+                    .findFirst().orElse(null);
 
-            if (hasTaskAtPosition) {
-                System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+            if (taskAtPosition != null) {
+                if (taskAtPosition.buildingType == task.buildingType) {
+                    System.out.println("该位置已有建造任务，跳过: " + task.buildPosition);
+                } else {
+                    task.setBuildPosition(Games.game.getBuildLocation(task.buildingType, task.buildPosition, 15));
+                }
                 return;
             }
 
@@ -114,19 +124,15 @@ public class Builds {
             removeTask(task);
             return;
         }
-
         if (task.isSubmitted()) {
             checkBuildCompletion(task);
             return;
         }
-
         // 如果工人还在携带资源，等待它放下
         if (task.worker.isCarryingMinerals() || task.worker.isCarryingGas()) {
             return;
         }
-
         moveToBuildPosition(task);
-
         if (canBuild(task)) {
             tryBuild(task);
         } else if (task.worker.isIdle()) {
@@ -171,16 +177,14 @@ public class Builds {
     private static void tryBuild(BuildTask task) {
         System.out.println("建造" + task.buildingType + "，工人空闲：" + task.worker.isIdle()
                 + "，位置: " + task.worker.getTilePosition() + " -> " + task.buildPosition);
-
         // 堵口任务使用宽松验证
         boolean isWallOff = task.getIdempotentNo().startsWith("first") ||
                 task.getIdempotentNo().contains("bunker") ||
                 task.getIdempotentNo().contains("barracks") ||
                 task.getIdempotentNo().contains("wall");
-
         if (isWallOff) {
             if (!Games.isBuildable(task.buildPosition)) {
-                System.out.println("[ERROR] 堵口位置地形不可建造");
+                System.out.println("[ERROR] 堵口位置地形不可建造" + task.buildPosition + ", buildingType=" + task.buildingType);
                 Positions.markFailedPosition(task.buildPosition);
                 task.worker.stop();
                 removeTask(task);
@@ -188,19 +192,18 @@ public class Builds {
             }
         } else {
             if (!LocationValidator.isValid(task.buildPosition, task.buildingType)) {
-                System.out.println("[ERROR] 位置验证失败");
+                System.out.println("[ERROR] 位置验证失败 buildPosition=" + task.buildPosition + ", buildingType=" + task.buildingType);
                 Positions.markFailedPosition(task.buildPosition);
                 task.worker.stop();
                 removeTask(task);
                 return;
             }
         }
-
         if (task.worker.build(task.buildingType, task.buildPosition)) {
-            System.out.println("成功下达建造命令");
+            System.out.println("成功下达建造命令"+ task.buildPosition + ", buildingType=" + task.buildingType);
             task.setSubmitted(true);
         } else {
-            System.out.println("建造命令失败，放弃任务...");
+            System.out.println("建造命令失败，放弃任务..."+ task.buildPosition + ", buildingType=" + task.buildingType);
 
             TilePosition workerTile = task.worker.getTilePosition();
             int tileDistX = Math.abs(workerTile.getX() - task.buildPosition.getX());

@@ -6,6 +6,7 @@ import com.yangky.scbotdemo.bwem.task.BuildTask;
 import com.yangky.scbotdemo.util.Positions;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -66,6 +67,11 @@ public class OnFrameForTank extends OnFrame {
             armories.stream().filter(e -> e.isCompleted() && e.isIdle()).findFirst().ifPresent(armory -> armory.research(TechType.Tank_Siege_Mode));
         }
         // 造坦克
+        // 设置集结点
+        Unit barrack = self.getUnits().stream()
+                .filter(e -> e.getType() == UnitType.Terran_Barracks && e.isCompleted())
+                .max(Comparator.comparing(e -> e.getDistance(base.getPosition())))
+                .orElse(null);
         factories.stream().filter(e -> e.isCompleted() && e.getAddon() != null && e.getAddon().isCompleted() && e.isIdle()).forEach(e -> {
             Set<Unit> tanks = Units.getSelfUnits(UnitType.Terran_Siege_Tank_Tank_Mode);
             Set<Unit> siegeTanks = Units.getSelfUnits(UnitType.Terran_Siege_Tank_Siege_Mode);
@@ -73,48 +79,47 @@ public class OnFrameForTank extends OnFrame {
                 return;
             }
             e.train(UnitType.Terran_Siege_Tank_Tank_Mode);
-            // 设置集结点
-            Set<Unit> bunkers = Units.getSelfUnits(UnitType.Terran_Bunker);
-            if (!bunkers.isEmpty()) {
-                e.setRallyPoint(Units.getSelfUnits(UnitType.Terran_Bunker).iterator().next());
+            if (barrack != null) {
+                e.setRallyPoint(barrack.getPosition());
             }
+            siegeTanks.stream().max(Comparator.comparing(t -> t.getDistance(base.getPosition()))).ifPresent(e::setRallyPoint);
         });
-        if (Supplies.getMaxSupplyUsed() < 90 || Units.getSelfUnits(UnitType.Terran_Engineering_Bay).isEmpty()) {
+        if (Supplies.getMaxSupplyUsed() < 80 || Units.getSelfUnits(UnitType.Terran_Engineering_Bay).isEmpty()) {
             return;
         }
         // 路口坦克支架
-        Set<Unit> tanks = Units.getSelfUnits(UnitType.Terran_Siege_Tank_Siege_Mode);
+        Set<Unit> tanks = self.getUnits().stream()
+                .filter(e -> e.getType() == UnitType.Terran_Siege_Tank_Tank_Mode || e.getType() == UnitType.Terran_Siege_Tank_Siege_Mode)
+                .collect(Collectors.toSet());
         for (Unit tank : tanks) {
             if (!tank.isSieged() && self.hasResearched(TechType.Tank_Siege_Mode)) {
-                Set<Unit> bunkers = Units.getSelfUnits(UnitType.Terran_Bunker);
-                if (!bunkers.isEmpty()) {
-                    if (tank.getDistance(bunkers.iterator().next()) < 5) {
+                if (barrack != null) {
+                    if (tank.getDistance(barrack) < 5) {
                         tank.siege();
                     }
                 } else if (tank.isIdle()) {
                     tank.siege();
                 }
-                tank.siege();
             }
         }
         // 受到攻击的建筑拉scv修复
-        Set<Unit> fixedUnits = Games.game.self().getUnits().stream().filter(e -> e.getHitPoints() < e.getType().maxHitPoints() && e.canRepair()).collect(Collectors.toSet());
+        Set<Unit> fixedUnits = Games.game.self().getUnits().stream()
+                .filter(e -> e.getHitPoints() < e.getType().maxHitPoints() && e.getType().isMechanical())
+                .collect(Collectors.toSet());
         for (Unit building : fixedUnits) {
-            if (building.isUnderAttack() || building.getHitPoints() < building.getType().maxHitPoints()) {
-                Set<Unit> repairWorkers = Workers.getRepairingWorkers(building);
-                for (int i = repairWorkers.size(); i < 2; i++) {
-                    Unit worker = Workers.getRepairWorker(Games.game.self(), building);
-                    if (worker != null) {
-                        worker.repair(building);
-                        Workers.markRepairingWorker(worker, building);
-                    }
+            Set<Unit> repairWorkers = Workers.getRepairingWorkers(building);
+            for (int i = repairWorkers.size(); i < 2; i++) {
+                Unit worker = Workers.getRepairWorker(Games.game.self(), building);
+                if (worker != null) {
+                    worker.repair(building);
+                    Workers.markRepairingWorker(worker, building);
                 }
             }
         }
         // 边缘区域修防空
         Set<Unit> missiles = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
         int missileBuildingCount = Builds.getCountByBuildingType(UnitType.Terran_Missile_Turret);
-        if (missiles.size() < 15 && missileBuildingCount < 4) {
+        if (missiles.size() < 30 && missileBuildingCount < 4) {
             TilePosition newPos = Positions.getMissilePosition(Bases.getMainBaseUnit());
             if (newPos != null) {
                 BuildTask task = new BuildTask("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret);
