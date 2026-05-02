@@ -38,6 +38,9 @@ public class OnFrameForGas extends OnFrame {
         List<Unit> bases = Bases.getBaseCenterList(self);
         bases.forEach(e -> {
             Base base = Bases.getBaseFormBaseUnit(e);
+            if (base == null) {
+                return;
+            }
             base.getGeysers().forEach(geyser -> {
                 Unit refinery = findRefineryForGeyser(geyser.getUnit());
                 if (refinery != null && refinery.isCompleted()) {
