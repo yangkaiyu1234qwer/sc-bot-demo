@@ -106,7 +106,7 @@ public class WallOffExecutor {
             return;
         }
         rescueWaitFrames++;
-        if (rescueWaitFrames >= 10) {//frame本身已经有帧数限制
+        if (rescueWaitFrames >= 20) {//frame本身已经有帧数限制
             if (rescueBarracks.exists() && rescueBarracks.isFlying() && barracksLandPosition != null) {
                 if (!rescueBarracks.isIdle()) rescueBarracks.cancelTrain();
                 if (rescueBarracks.land(barracksLandPosition)) {

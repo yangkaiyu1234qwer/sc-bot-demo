@@ -15,9 +15,6 @@ import com.yangky.scbotdemo.util.Properties;
 import com.yangky.scbotdemo.util.Times;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
-
-import java.util.List;
 
 /**
  * SupplyOnframe
@@ -42,13 +39,15 @@ public class OnFrameForSupply extends OnFrame {
             return;
         }
         Player player = Games.game.self();
+        if (player.supplyTotal() >= 400) {
+            return;
+        }
         int supplyDeficit = Supplies.supplyDeficit(player);
         if (supplyDeficit > 0) {
             // 补人口
             UnitType supplyBuilding = Supplies.getSupplyUnitType(player);
-            List<Unit> baseList = Bases.getBaseCenterList(player);
-            if (CollectionUtils.isEmpty(baseList)) return;
-            Unit mainBase = baseList.get(0);
+            Unit mainBase = Bases.getMainBaseUnit();
+            if (mainBase == null) return;
             TilePosition buildPos = Positions.getEdgePosition(supplyBuilding, mainBase);
             if (buildPos == null) {
                 return;

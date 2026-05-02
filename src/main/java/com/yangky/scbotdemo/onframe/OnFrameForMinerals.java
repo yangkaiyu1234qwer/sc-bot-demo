@@ -3,7 +3,6 @@ package com.yangky.scbotdemo.onframe;
 import bwapi.Player;
 import bwapi.Unit;
 import com.yangky.scbotdemo.bwem.Bases;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Workers;
 import com.yangky.scbotdemo.util.Times;
@@ -36,17 +35,16 @@ public class OnFrameForMinerals extends OnFrame {
         if (frame < 100) {
             return;
         }
-        // 调试阶段 10分钟后不再调配闲置农民
-        if (Times.secondsFromStart() > 600 * 1000) {
-            return;
-        }
+//        // 调试阶段 10分钟后不再调配闲置农民
+//        if (Times.secondsFromStart() > 600 * 1000) {
+//            return;
+//        }
         // 空闲农民采矿
-        List<Unit> workersOnBuilding = Builds.getBuildingWorkers();
         List<Unit> idleWorkers = self.getUnits().stream()
                 .filter(e -> e.getType().isWorker() && e.isIdle())
                 .filter(e -> !Workers.isBuilder(e))
+                .filter(e -> !Workers.isRepairer(e))
                 .collect(Collectors.toList());
-        idleWorkers = idleWorkers.stream().filter(e -> !workersOnBuilding.contains(e)).collect(Collectors.toList());
         idleWorkers.forEach(e -> {
             Workers.goGatherLessLoader(e, Bases.getNearestBase(e.getTilePosition()));
         });

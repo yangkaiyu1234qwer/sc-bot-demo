@@ -3,7 +3,10 @@ package com.yangky.scbotdemo.bwem;
 import bwapi.Unit;
 import bwapi.UnitType;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
@@ -30,14 +33,10 @@ public class Units {
             Supplies.maxSupplyUsedIncrement(unit.getType().supplyRequired());
         }
         selfUnitMap.put(unit.getType(), set);
-
         // 如果是正造建造的单位，则加入正在建造的集合
         if (unit.isBeingConstructed()) {
             unitsBeBuilding.add(unit);
         }
-
-        // 探路农民编队1
-
         // 第一个基地遍队2
         if (unit.getType() == UnitType.Terran_Command_Center || unit.getType() == UnitType.Protoss_Nexus || unit.getType() == UnitType.Zerg_Lair) {// 是基地
             CopyOnWriteArraySet<Unit> team2 = teamUnitMap.getOrDefault(2, new CopyOnWriteArraySet<Unit>());
@@ -70,5 +69,20 @@ public class Units {
         selfUnitMap.clear();
         teamUnitMap.clear();
         unitsBeBuilding.clear();
+    }
+
+    public static Set<Unit> getBuildingUnits() {
+        Set<Unit> buildingUnits = new HashSet<>();
+        selfUnitMap.entrySet().stream()
+                .filter(entry -> entry.getKey().isBuilding())
+                .forEach(e -> {
+                    Set<Unit> units = e.getValue();
+                    units.forEach(u -> {
+                        if (u.isCompleted()) {
+                            buildingUnits.add(u);
+                        }
+                    });
+                });
+        return buildingUnits;
     }
 }

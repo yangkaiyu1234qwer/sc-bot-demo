@@ -24,6 +24,8 @@ public class Workers {
 
     // 有建造经验的 SCV
     private static final Set<Unit> experiencedBuilders = new HashSet<>();
+    // 维修建筑的scv缓存
+    private static final Map<Unit, Unit> repairCache = new HashMap<>();
 
     // ==================== 标记与查询（只管添加，不管删除）====================
     public static boolean isGatheringWorker(Unit worker) {
@@ -138,6 +140,11 @@ public class Workers {
     }
 
     public static Unit getRepairWorker(Player player, Unit damagedBuilding) {
+        for (Unit scv : repairCache.keySet()) {
+            if (scv != null && scv.exists() && scv.isIdle()) {
+                return scv;
+            }
+        }
         for (Unit scv : experiencedBuilders) {
             if (scv != null && scv.exists() && scv.isIdle()) {
                 return scv;
@@ -165,23 +172,8 @@ public class Workers {
         if (distToBase >= 5 && distToBase <= 10) {
             return;
         }
-        Position target = calculateDirectionTowardsBase(worker, mainBase);
-        worker.rightClick(target);
-    }
-
-    private static Position calculateDirectionTowardsBase(Unit worker, Unit base) {
-        Position workerPos = worker.getPosition();
-        Position basePos = base.getPosition();
-        double dx = basePos.getX() - workerPos.getX();
-        double dy = basePos.getY() - workerPos.getY();
-        double distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance == 0) {
-            return basePos;
-        }
-        int targetDist = 8 * 32;
-        int targetX = workerPos.getX() + (int) (dx / distance * targetDist);
-        int targetY = workerPos.getY() + (int) (dy / distance * targetDist);
-        return new Position(targetX, targetY);
+        // ✅ 直接右键点击基地，让游戏引擎自己处理寻路
+        worker.rightClick(mainBase.getPosition());
     }
 
     // ==================== 工人选择 ====================
@@ -298,10 +290,23 @@ public class Workers {
     public static void clearCache() {
         workerToResourceMap.clear();
         experiencedBuilders.clear();
+        repairCache.clear();
     }
 
     public static void goGatherGas(Unit worker, Unit refinery) {
         worker.gather(refinery);
         workerToResourceMap.put(worker, refinery);
+    }
+
+    public static Set<Unit> getRepairingWorkers(Unit building) {
+        return repairCache.entrySet().stream().filter(e -> e.getValue().equals(building)).map(Map.Entry::getKey).collect(Collectors.toSet());
+    }
+
+    public static void markRepairingWorker(Unit worker, Unit building) {
+        repairCache.put(worker, building);
+    }
+
+    public static boolean isRepairer(Unit worker) {
+        return repairCache.containsKey(worker);
     }
 }

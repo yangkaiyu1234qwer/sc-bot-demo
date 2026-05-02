@@ -131,7 +131,7 @@ public class Bases {
         return Games.bwem.getMap()
                 .getBases()
                 .stream()
-                .filter(e -> e.isStartingLocation())
+                .filter(Base::isStartingLocation)
                 .findFirst().
                 orElse(null);
     }
