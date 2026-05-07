@@ -200,10 +200,10 @@ public class Builds {
             }
         }
         if (task.worker.build(task.buildingType, task.buildPosition)) {
-            System.out.println("成功下达建造命令"+ task.buildPosition + ", buildingType=" + task.buildingType);
+            System.out.println("成功下达建造命令" + task.buildPosition + ", buildingType=" + task.buildingType);
             task.setSubmitted(true);
         } else {
-            System.out.println("建造命令失败，放弃任务..."+ task.buildPosition + ", buildingType=" + task.buildingType);
+            System.out.println("建造命令失败，放弃任务..." + task.buildPosition + ", buildingType=" + task.buildingType);
 
             TilePosition workerTile = task.worker.getTilePosition();
             int tileDistX = Math.abs(workerTile.getX() - task.buildPosition.getX());
@@ -265,14 +265,15 @@ public class Builds {
             System.out.println("建筑已完成: " + task.getIdempotentNo());
             // ✅ 标记为有经验建筑师，并让它回到基地附近
             Workers.markAsExperiencedBuilder(task.worker);
-            Workers.returnToBaseArea(task.worker);
+//            Workers.returnToBaseArea(task.worker);
+            task.worker.rightClick(Locations.getCentralAreaCenter().toPosition());
             // 执行回调（如果有）
             if (Objects.nonNull(task.callback)) {
                 System.out.println("执行回调: " + task.getIdempotentNo());
                 task.callback.execute();
             }
-            // ✅ 标记任务为完成（而不是立即删除，让缓存自动清理）
-            task.setCompleted(true);
+            // ✅ 紧急修复：建筑完成后立即移除任务，避免阻塞后续相同 ID 的任务
+            removeTask(task);
             return;
         }
         // 建筑存在但未开始建造（可能是被打断）

@@ -26,10 +26,6 @@ import java.util.concurrent.CopyOnWriteArraySet;
  * @Date 2026/5/2 12:24
  */
 public class Locations {
-
-    private static final boolean DEBUG_LOG = true;
-    private static final int EDGE_DISTANCE = 3;
-
     private static boolean initialized = false;
     @Getter
     private static final Map<TilePosition, Location> locationMap = new HashMap<>();
@@ -37,6 +33,14 @@ public class Locations {
     private static Set<TilePosition> outerBoundary = new HashSet<>();
     private static List<ChokePoint> exits = new ArrayList<>();
     private static Set<TilePosition> reachableArea = new HashSet<>();
+
+    // ✅ 新增：关键点位
+    @Getter
+    private static TilePosition chokePointCenter = null;  // ChokePoint 中心点（坦克集结处）
+    @Getter
+    private static TilePosition centralAreaCenter = null; // CENTRAL 区域中心点（SCV 回归点）
+    private static final Boolean DEBUG_LOG = false;
+    private static final int EDGE_DISTANCE = 1;
 
 
     /**
@@ -63,12 +67,19 @@ public class Locations {
         exits = identifyExits();
         log("[Locations] 出口数量: " + exits.size());
         classifyAllPositions(reachableArea, mainBase);
+
+        // ✅ 计算关键点位
+        chokePointCenter = calculateChokePointCenter();
+        centralAreaCenter = calculateCentralAreaCenter();
+
         initialized = true;
         long elapsed = System.currentTimeMillis() - startTime;
         log("[Locations] 分析完成！耗时: " + elapsed + "ms, " +
                 "可达区域: " + reachableArea.size() + " 格, " +
                 "边界: " + outerBoundary.size() + " 格, " +
-                "出口: " + exits.size() + " 个");
+                "出口: " + exits.size() + " 个, " +
+                "ChokePoint中心: " + chokePointCenter + ", " +
+                "CENTRAL中心: " + centralAreaCenter);
     }
 
     /**
@@ -96,6 +107,68 @@ public class Locations {
             }
         }
         return result;
+    }
+
+    /**
+     * ✅ 计算 ChokePoint 中心点（坦克集结处）
+     */
+    private static TilePosition calculateChokePointCenter() {
+        if (exits == null || exits.isEmpty()) {
+            log("[Locations] 警告：没有检测到 ChokePoint");
+            return null;
+        }
+
+        // 取所有 ChokePoint 的中心点的平均值
+        int totalX = 0;
+        int totalY = 0;
+        int count = 0;
+
+        for (ChokePoint cp : exits) {
+            if (cp != null && cp.getCenter() != null) {
+                TilePosition chokeTile = cp.getCenter().toTilePosition();
+                totalX += chokeTile.getX();
+                totalY += chokeTile.getY();
+                count++;
+            }
+        }
+
+        if (count == 0) {
+            return null;
+        }
+
+        TilePosition center = new TilePosition(totalX / count, totalY / count);
+        log("[Locations] ChokePoint 中心点: " + center);
+        return center;
+    }
+
+    /**
+     * ✅ 计算 CENTRAL 区域中心点（SCV 回归点）
+     */
+    private static TilePosition calculateCentralAreaCenter() {
+        Set<TilePosition> centralTiles = getPositionsByRegion(Location.RegionType.CENTRAL);
+        if (centralTiles.isEmpty()) {
+            log("[Locations] 警告：CENTRAL 区域为空");
+            return null;
+        }
+
+        // 取所有 CENTRAL 区域的 Tile 的平均值
+        int totalX = 0;
+        int totalY = 0;
+        int count = 0;
+
+        for (TilePosition pos : centralTiles) {
+            totalX += pos.getX();
+            totalY += pos.getY();
+            count++;
+        }
+
+        if (count == 0) {
+            return null;
+        }
+
+        TilePosition center = new TilePosition(totalX / count, totalY / count);
+        log("[Locations] CENTRAL 区域中心点: " + center);
+        return center;
     }
 
     /**

@@ -2,10 +2,7 @@ package com.yangky.scbotdemo.onframe;
 
 
 import bwapi.*;
-import com.yangky.scbotdemo.bwem.Bases;
-import com.yangky.scbotdemo.bwem.Builds;
-import com.yangky.scbotdemo.bwem.Games;
-import com.yangky.scbotdemo.bwem.Units;
+import com.yangky.scbotdemo.bwem.*;
 import com.yangky.scbotdemo.bwem.task.BuildTask;
 import com.yangky.scbotdemo.util.Positions;
 import org.springframework.stereotype.Component;
@@ -42,8 +39,8 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long buildingStarports = Builds.getCountByBuildingType(UnitType.Terran_Starport);
         long starportCount = completedStarports + buildingStarports;
 
-        if (starportCount < 3) {
-            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Starport, base);
+        if (starportCount < 5) {
+            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Starport, Locations.getCentralAreaCenter().toPosition().toTilePosition());
             if (pos != null) {
                 String taskId = "starport_" + (starportCount + 1);
                 Builds.add(new BuildTask(taskId, pos, UnitType.Terran_Starport, null));
@@ -67,7 +64,7 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long buildingFacilities = Builds.getCountByBuildingType(UnitType.Terran_Science_Facility);
         long facilityCount = completedFacilities + buildingFacilities;
         if (facilityCount < 1) {
-            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, base);
+            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, Locations.getCentralAreaCenter().toPosition().toTilePosition());
             Builds.add(new BuildTask("facility_1", pos, UnitType.Terran_Science_Facility, null));
         }
 
@@ -111,7 +108,7 @@ public class OnFrameForBattleCruiser extends OnFrame {
                 if (completedBCs >= targetCount) {
                     break;
                 }
-                if (starport.canTrain(UnitType.Terran_Battlecruiser)) {
+                if (starport.canTrain(UnitType.Terran_Battlecruiser) && starport.isIdle()) {
                     starport.train(UnitType.Terran_Battlecruiser);
                     completedBCs++;
                     // 设置集结点（可选：指向基地或前线）

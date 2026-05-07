@@ -33,10 +33,10 @@ public class OnFrameForTank extends OnFrame {
         long factoryCount = completedFactories + buildingFactories;
         if (self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40) {
             if (factoryCount < 1) {
-                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, base);
+                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, Locations.getCentralAreaCenter().toPosition().toTilePosition());
                 Builds.add(new BuildTask("factory_1", pos, UnitType.Terran_Factory, null));  // ✅ 固定 ID
             } else if (factoryCount < 2) {
-                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, base);
+                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, Locations.getCentralAreaCenter().toPosition().toTilePosition());
                 Builds.add(new BuildTask("factory_2", pos, UnitType.Terran_Factory, null));  // ✅ 固定 ID
             }
         }
@@ -80,7 +80,7 @@ public class OnFrameForTank extends OnFrame {
             }
             e.train(UnitType.Terran_Siege_Tank_Tank_Mode);
             if (barrack != null) {
-                e.setRallyPoint(barrack.getPosition());
+                e.setRallyPoint(Locations.getChokePointCenter().toPosition());
             }
             siegeTanks.stream().max(Comparator.comparing(t -> t.getDistance(base.getPosition()))).ifPresent(e::setRallyPoint);
         });
@@ -119,7 +119,7 @@ public class OnFrameForTank extends OnFrame {
         // 边缘区域修防空
         Set<Unit> missiles = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
         int missileBuildingCount = Builds.getCountByBuildingType(UnitType.Terran_Missile_Turret);
-        if (missiles.size() < 30 && missileBuildingCount < 4) {
+        if (missiles.size() < 45 && missileBuildingCount < 4) {
             TilePosition newPos = Positions.getMissilePosition(Bases.getMainBaseUnit());
             if (newPos != null) {
                 BuildTask task = new BuildTask("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret);

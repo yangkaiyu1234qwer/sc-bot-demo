@@ -117,11 +117,10 @@ public class Positions {
     /**
      * 腹地选址：Factory等中期战斗建筑（基于 Locations 的 CENTRAL 区域，远离基地）
      */
-    public static TilePosition getCentralPosition(UnitType building, Unit base) {
-        if (base == null || !base.exists() || !Locations.isInitialized()) {
+    public static TilePosition getCentralPosition(UnitType building, TilePosition basePos) {
+        if (basePos == null || !Locations.isInitialized()) {
             return null;
         }
-        TilePosition basePos = base.getTilePosition();
         log("[CENTRAL] 开始搜索 - 基地: " + basePos);
         // 从 CENTRAL 区域筛选距离基地
         Set<TilePosition> centralTiles = Locations.getPositionsByRegion(Location.RegionType.CENTRAL);
@@ -347,9 +346,6 @@ public class Positions {
         }
     }
 
-    /**
-     * 防空选址：边缘区域，间隔6-8格
-     */
     public static TilePosition getMissilePosition(Unit base) {
         if (base == null || !base.exists() || !Locations.isInitialized()) {
             return null;
@@ -359,13 +355,13 @@ public class Positions {
         List<TilePosition> edgeSorted = edgeTiles.stream()
                 .sorted(Comparator.comparingInt(e -> -e.getApproxDistance(basePos))).collect(Collectors.toList());
         Set<Unit> existingAAs = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
-        int minSpacing = 5; // 间隔5格
+        int minSpacing = 5;
+
+        // ✅ 第一优先：EDGE 区域 + 间距检查
         for (TilePosition pos : edgeSorted) {
-            // 基础验证
             if (!isCandidateValid(pos, UnitType.Terran_Missile_Turret, basePos, null)) {
                 continue;
             }
-            // 检查与所有已有防空的距离
             boolean isFarEnough = true;
             for (Unit aa : existingAAs) {
                 if (aa.getTilePosition().getApproxDistance(pos) < minSpacing) {
@@ -374,16 +370,17 @@ public class Positions {
                 }
             }
             if (isFarEnough) {
-                log("[MissileTurrets] ✓ 选择位置: " + pos);
+                log("[MissileTurrets] ✓ 选择 EDGE 位置: " + pos);
                 return pos;
             }
         }
+
+        // ✅ 第二优先：MINERAL 区域 + 间距检查
         Set<TilePosition> mineralPositions = Locations.getPositionsByRegion(Location.RegionType.MINERAL);
         for (TilePosition pos : mineralPositions) {
             if (!isCandidateValid(pos, UnitType.Terran_Missile_Turret, basePos, null)) {
                 continue;
             }
-            // 检查与所有已有防空的距离
             boolean isFarEnough = true;
             for (Unit aa : existingAAs) {
                 if (aa.getTilePosition().getApproxDistance(pos) < minSpacing) {
@@ -391,13 +388,21 @@ public class Positions {
                     break;
                 }
             }
-            // 检查与最近的水晶、气矿的距离
             if (isFarEnough && LocationValidator.isValid(pos, UnitType.Terran_Missile_Turret)) {
-                log("[MissileTurrets] ✓ 选择位置: " + pos);
+                log("[MissileTurrets] ✓ 选择 MINERAL 位置: " + pos);
                 return pos;
             }
         }
-        log("[MissileTurrets] ✗ 未找到合适位置（可能已布满）");
+
+        // ✅ 第三优先：使用 BWAPI 默认方法（兜底）
+        log("[MissileTurrets] 自定义选址失败，使用 BWAPI 默认方法");
+        TilePosition fallback = Games.game.getBuildLocation(UnitType.Terran_Missile_Turret, basePos, 30);
+        if (fallback != null) {
+            log("[MissileTurrets] ✓ 降级方案位置: " + fallback);
+            return fallback;
+        }
+
+        log("[MissileTurrets] ✗ 未找到合适位置");
         return null;
     }
 
