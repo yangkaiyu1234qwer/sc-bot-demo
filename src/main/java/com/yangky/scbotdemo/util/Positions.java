@@ -3,7 +3,11 @@ package com.yangky.scbotdemo.util;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
-import com.yangky.scbotdemo.bwem.*;
+import com.yangky.scbotdemo.bwem.Games;
+import com.yangky.scbotdemo.bwem.LocationValidator;
+import com.yangky.scbotdemo.bwem.Locations;
+import com.yangky.scbotdemo.bwem.Units;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,7 +44,7 @@ public class Positions {
         TilePosition basePos = base.getTilePosition();
         log("[EdgeZone] 开始搜索 - 基地: " + basePos + ", 边缘距离: " + dist);
         // 直接从 Locations 获取 EDGE 区域候选
-        Set<TilePosition> edgeTiles = Locations.getPositionsByRegion(Location.RegionType.EDGE);
+        Set<TilePosition> edgeTiles = Locations.getPositionsByRegion(RegionType.EDGE);
         List<TilePosition> candidates = new ArrayList<>();
         for (TilePosition pos : edgeTiles) {
             if (isCandidateValid(pos, building, basePos, dist)) {
@@ -61,7 +65,7 @@ public class Positions {
             }
         }
         log("[EdgeZone] 验证失败，使用中心区域");
-        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(Location.RegionType.CENTRAL);
+        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(RegionType.CENTRAL);
         for (TilePosition pos : centralTiles) {
             if (LocationValidator.isValid(pos, building) && isReachable(pos)) {
                 log("[EdgeZone] ✓ 选择中心位置: " + pos);
@@ -89,7 +93,7 @@ public class Positions {
         TilePosition basePos = base.getTilePosition();
         log("[InnerRing] 开始搜索 - 基地: " + basePos);
         // 从 CENTRAL 区域筛选距离基地 5-10 格的候选
-        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(Location.RegionType.CENTRAL);
+        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(RegionType.CENTRAL);
         List<TilePosition> candidates = new ArrayList<>();
         for (TilePosition pos : centralTiles) {
             int distToBase = basePos.getApproxDistance(pos);
@@ -113,6 +117,53 @@ public class Positions {
         log("[InnerRing] 所有候选均无效，使用降级方案");
         return Games.game.getBuildLocation(building, basePos, 15);
     }
+    /**
+     * 腹地选址：Factory等中期战斗建筑（基于 Locations 的 CENTRAL 区域，远离基地）
+     */
+    public static TilePosition getCentralPosition(UnitType building, TilePosition basePos) {
+        if (basePos == null || !Locations.isInitialized()) {
+            return null;
+        }
+        log("[CENTRAL] 开始搜索 - 基地: " + basePos);
+        // 从 CENTRAL 区域筛选距离基地
+        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(RegionType.CENTRAL);
+        List<TilePosition> candidates = new ArrayList<>();
+        for (TilePosition pos : centralTiles) {
+            if (isCandidateValid(pos, building, basePos, null)) {
+                candidates.add(pos);
+            }
+        }
+        log("[CENTRAL] 生成候选: " + candidates.size() + " 个");
+        TilePosition result = selectWeightedRandomInner(candidates, basePos);
+        if (LocationValidator.isValid(result, building) && isReachable(result)) {
+            log("[CENTRAL] ✓ 选择位置: " + result);
+            return result;
+        }
+        log("[CENTRAL] 验证失败，尝试备选");
+        for (TilePosition candidate : candidates) {
+            if (!candidate.equals(result) && LocationValidator.isValid(candidate, building) && isReachable(candidate)) {
+                log("[CENTRAL] ✓ 选择备选位置: " + candidate);
+                return candidate;
+            }
+        }
+        // 放宽条件：仅验证位置合法性，不检查可达性
+        log("[Heartland] 放宽条件，仅验证位置合法性");
+        for (TilePosition candidate : candidates) {
+            if (LocationValidator.isValid(candidate, building)) {
+                log("[Heartland] ✓ 选择位置（忽略可达性）: " + candidate);
+                return candidate;
+            }
+        }
+        log("[Heartland] ✗ 所有候选均无效，使用降级方案");
+        TilePosition fallback = Games.game.getBuildLocation(building, basePos, 25);
+        if (fallback != null) {
+            log("[Heartland] 降级方案位置: " + fallback);
+            return fallback;
+        }
+        log("[Heartland] ✗ 降级方案也失败，返回 null");
+        return null;
+    }
+
 
     /**
      * 腹地选址：Factory等中期战斗建筑（基于 Locations 的 CENTRAL 区域，远离基地）
@@ -123,11 +174,10 @@ public class Positions {
         }
         log("[CENTRAL] 开始搜索 - 基地: " + basePos);
         // 从 CENTRAL 区域筛选距离基地
-        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(Location.RegionType.CENTRAL);
+        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(RegionType.CENTRAL);
         List<TilePosition> candidates = new ArrayList<>();
         for (TilePosition pos : centralTiles) {
-//            int distToBase = basePos.getApproxDistance(pos);
-            if (/*distToBase > 10 && */isCandidateValid(pos, building, basePos, null)) {
+            if (isCandidateValid(pos, building, basePos, null)) {
                 candidates.add(pos);
             }
         }
@@ -175,7 +225,7 @@ public class Positions {
             return chokePoint;
         }
         // 从 CHOKE_POINT 区域筛选候选
-        Set<TilePosition> chokeTiles = Locations.getPositionsByRegion(Location.RegionType.CHOKE_POINT);
+        Set<TilePosition> chokeTiles = Locations.getPositionsByRegion(RegionType.CHOKE_POINT);
         for (TilePosition candidate : chokeTiles) {
             if (LocationValidator.isValid(candidate, building)) {
                 log("[ChokePoint] ✓ 选择位置: " + candidate);
@@ -351,7 +401,7 @@ public class Positions {
             return null;
         }
         TilePosition basePos = base.getTilePosition();
-        Set<TilePosition> edgeTiles = Locations.getPositionsByRegion(Location.RegionType.EDGE);
+        Set<TilePosition> edgeTiles = Locations.getPositionsByRegion(RegionType.EDGE);
         List<TilePosition> edgeSorted = edgeTiles.stream()
                 .sorted(Comparator.comparingInt(e -> -e.getApproxDistance(basePos))).collect(Collectors.toList());
         Set<Unit> existingAAs = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
@@ -376,7 +426,7 @@ public class Positions {
         }
 
         // ✅ 第二优先：MINERAL 区域 + 间距检查
-        Set<TilePosition> mineralPositions = Locations.getPositionsByRegion(Location.RegionType.MINERAL);
+        Set<TilePosition> mineralPositions = Locations.getPositionsByRegion(RegionType.MINERAL);
         for (TilePosition pos : mineralPositions) {
             if (!isCandidateValid(pos, UnitType.Terran_Missile_Turret, basePos, null)) {
                 continue;

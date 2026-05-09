@@ -5,6 +5,8 @@ import bwapi.DefaultBWListener;
 import bwapi.Game;
 import bwapi.Unit;
 import com.yangky.scbotdemo.bwem.*;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
 import com.yangky.scbotdemo.bwem.walloff.WallOffExecutor;
 import com.yangky.scbotdemo.listner.created.UnitCreatedListenerChain;
 import com.yangky.scbotdemo.listner.destroy.UnitDestroyListenerChain;
@@ -13,8 +15,6 @@ import com.yangky.scbotdemo.util.Positions;
 import com.yangky.scbotdemo.util.Printer;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * GameListner
@@ -179,6 +179,7 @@ public class GameListener extends DefaultBWListener implements CommandLineRunner
 
         // 5. 清理 Builds 任务列表
         Builds.clearAll();
+        BuildExecutor.clear();
         System.out.println("[清理] Builds 任务列表已清理");
 
         // 6. 清理 Workers 缓存
@@ -197,6 +198,7 @@ public class GameListener extends DefaultBWListener implements CommandLineRunner
         System.out.println("[清理] 工人移动追踪已清理");
 
         Positions.resetFailedPositions();
+        RegionsClassifier.clear();
 
         System.out.println("[清理] 资源清理完成\n");
     }

@@ -80,7 +80,7 @@ public class OnFrameForTank extends OnFrame {
             }
             e.train(UnitType.Terran_Siege_Tank_Tank_Mode);
             if (barrack != null) {
-                e.setRallyPoint(Locations.getChokePointCenter().toPosition());
+                e.setRallyPoint(barrack.getTilePosition().toPosition());
             }
             siegeTanks.stream().max(Comparator.comparing(t -> t.getDistance(base.getPosition()))).ifPresent(e::setRallyPoint);
         });

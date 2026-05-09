@@ -132,8 +132,8 @@ public class Bases {
                 .getBases()
                 .stream()
                 .filter(Base::isStartingLocation)
-                .findFirst().
-                orElse(null);
+                .min(Comparator.comparingInt(e -> e.getCenter().getApproxDistance(Games.game.self().getStartLocation().toPosition())))
+                .orElse(null);
     }
 
     public static Unit getMainBaseUnit() {
