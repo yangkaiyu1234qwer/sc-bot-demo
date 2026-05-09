@@ -117,53 +117,6 @@ public class Positions {
         log("[InnerRing] 所有候选均无效，使用降级方案");
         return Games.game.getBuildLocation(building, basePos, 15);
     }
-    /**
-     * 腹地选址：Factory等中期战斗建筑（基于 Locations 的 CENTRAL 区域，远离基地）
-     */
-    public static TilePosition getCentralPosition(UnitType building, TilePosition basePos) {
-        if (basePos == null || !Locations.isInitialized()) {
-            return null;
-        }
-        log("[CENTRAL] 开始搜索 - 基地: " + basePos);
-        // 从 CENTRAL 区域筛选距离基地
-        Set<TilePosition> centralTiles = Locations.getPositionsByRegion(RegionType.CENTRAL);
-        List<TilePosition> candidates = new ArrayList<>();
-        for (TilePosition pos : centralTiles) {
-            if (isCandidateValid(pos, building, basePos, null)) {
-                candidates.add(pos);
-            }
-        }
-        log("[CENTRAL] 生成候选: " + candidates.size() + " 个");
-        TilePosition result = selectWeightedRandomInner(candidates, basePos);
-        if (LocationValidator.isValid(result, building) && isReachable(result)) {
-            log("[CENTRAL] ✓ 选择位置: " + result);
-            return result;
-        }
-        log("[CENTRAL] 验证失败，尝试备选");
-        for (TilePosition candidate : candidates) {
-            if (!candidate.equals(result) && LocationValidator.isValid(candidate, building) && isReachable(candidate)) {
-                log("[CENTRAL] ✓ 选择备选位置: " + candidate);
-                return candidate;
-            }
-        }
-        // 放宽条件：仅验证位置合法性，不检查可达性
-        log("[Heartland] 放宽条件，仅验证位置合法性");
-        for (TilePosition candidate : candidates) {
-            if (LocationValidator.isValid(candidate, building)) {
-                log("[Heartland] ✓ 选择位置（忽略可达性）: " + candidate);
-                return candidate;
-            }
-        }
-        log("[Heartland] ✗ 所有候选均无效，使用降级方案");
-        TilePosition fallback = Games.game.getBuildLocation(building, basePos, 25);
-        if (fallback != null) {
-            log("[Heartland] 降级方案位置: " + fallback);
-            return fallback;
-        }
-        log("[Heartland] ✗ 降级方案也失败，返回 null");
-        return null;
-    }
-
 
     /**
      * 腹地选址：Factory等中期战斗建筑（基于 Locations 的 CENTRAL 区域，远离基地）
