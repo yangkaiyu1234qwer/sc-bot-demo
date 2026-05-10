@@ -2,11 +2,15 @@ package com.yangky.scbotdemo.onframe;
 
 import bwapi.*;
 import com.yangky.scbotdemo.bwem.*;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
-import com.yangky.scbotdemo.util.Positions;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
+import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,25 +33,30 @@ public class OnFrameForTank extends OnFrame {
         Unit base = Bases.getMainBaseUnit();
         // 造VF
         long completedFactories = Units.getSelfUnits(UnitType.Terran_Factory).stream().filter(Unit::isCompleted).count();
-        long buildingFactories = Builds.getCountByBuildingType(UnitType.Terran_Factory);
+        long buildingFactories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Factory);
         long factoryCount = completedFactories + buildingFactories;
         if (self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40) {
-            if (factoryCount < 1) {
-                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, Locations.getCentralAreaCenter().toPosition().toTilePosition());
-                Builds.add(new BuildTask("factory_1", pos, UnitType.Terran_Factory, null));  // ✅ 固定 ID
-            } else if (factoryCount < 2) {
-                TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Factory, Locations.getCentralAreaCenter().toPosition().toTilePosition());
-                Builds.add(new BuildTask("factory_2", pos, UnitType.Terran_Factory, null));  // ✅ 固定 ID
+            if (factoryCount < 2) {
+                List<RegionType> regionTypes = new ArrayList<>();
+                regionTypes.add(RegionType.CENTRAL);
+                TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 0, 2, true);
+                BuildExecutor.add(Task.of("factory_" + (factoryCount + 1), pos, UnitType.Terran_Factory));
             }
         }
         // 造BE
         long barracksCount = Units.getSelfUnits(UnitType.Terran_Barracks).stream().filter(Unit::isCompleted).count();
-        long engineerCount = Builds.getCountByBuildingType(UnitType.Terran_Engineering_Bay) +
+        long engineerCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Engineering_Bay) +
                 Units.getSelfUnits(UnitType.Terran_Engineering_Bay).stream().filter(Unit::isCompleted).count();
         if (engineerCount < 1 && barracksCount > 0 && factoryCount > 0 && self.supplyUsed() >= 60) {
-            TilePosition pos = Positions.getEdgePosition(UnitType.Terran_Engineering_Bay, base);
-            Builds.add(new BuildTask("engineer_" + (++engineerCount), pos, UnitType.Terran_Engineering_Bay, null));
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.CENTRAL);
+            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Engineering_Bay, regionTypes, 0, 0, true);
+//            Builds.add(new BuildTask("engineer_" + (++engineerCount), pos, UnitType.Terran_Engineering_Bay, null));
+            BuildExecutor.add(Task.of("engineerCount", pos, UnitType.Terran_Engineering_Bay));
+        } else {
+            Units.getSelfUnits(UnitType.Terran_Engineering_Bay).forEach(Unit::lift);
         }
+
         // 放附件 - 使用重试机制
         Set<Unit> factories = Units.getSelfUnits(UnitType.Terran_Factory);
         factories.stream()
@@ -88,28 +97,28 @@ public class OnFrameForTank extends OnFrame {
             return;
         }
         // 路口坦克支架
-        Set<Unit> tanks = self.getUnits().stream()
-                .filter(e -> e.getType() == UnitType.Terran_Siege_Tank_Tank_Mode || e.getType() == UnitType.Terran_Siege_Tank_Siege_Mode)
-                .collect(Collectors.toSet());
-        for (Unit tank : tanks) {
-            if (!tank.isSieged() && self.hasResearched(TechType.Tank_Siege_Mode)) {
-                if (barrack != null) {
-                    if (tank.getDistance(barrack) < 5) {
-                        tank.siege();
-                    }
-                } else if (tank.isIdle()) {
-                    tank.siege();
-                }
-            }
-        }
+//        Set<Unit> tanks = self.getUnits().stream()
+//                .filter(e -> e.getType() == UnitType.Terran_Siege_Tank_Tank_Mode || e.getType() == UnitType.Terran_Siege_Tank_Siege_Mode)
+//                .collect(Collectors.toSet());
+//        for (Unit tank : tanks) {
+//            if (!tank.isSieged() && self.hasResearched(TechType.Tank_Siege_Mode)) {
+//                if (barrack != null) {
+//                    if (tank.getDistance(barrack) < 5) {
+//                        tank.siege();
+//                    }
+//                } else if (tank.isIdle()) {
+//                    tank.siege();
+//                }
+//            }
+//        }
         // 受到攻击的建筑拉scv修复
         Set<Unit> fixedUnits = Games.game.self().getUnits().stream()
-                .filter(e -> e.getHitPoints() < e.getType().maxHitPoints() && e.getType().isMechanical())
+                .filter(e -> e.getHitPoints() < e.getType().maxHitPoints() && e.getType().isMechanical() && e.getType().isBuilding())
                 .collect(Collectors.toSet());
         for (Unit building : fixedUnits) {
             Set<Unit> repairWorkers = Workers.getRepairingWorkers(building);
             for (int i = repairWorkers.size(); i < 2; i++) {
-                Unit worker = Workers.getRepairWorker(Games.game.self(), building);
+                Unit worker = Workers.getRepairWorker(building);
                 if (worker != null) {
                     worker.repair(building);
                     Workers.markRepairingWorker(worker, building);
@@ -118,13 +127,25 @@ public class OnFrameForTank extends OnFrame {
         }
         // 边缘区域修防空
         Set<Unit> missiles = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
-        int missileBuildingCount = Builds.getCountByBuildingType(UnitType.Terran_Missile_Turret);
-        if (missiles.size() < 45 && missileBuildingCount < 4) {
-            TilePosition newPos = Positions.getMissilePosition(Bases.getMainBaseUnit());
+        int missileBuildingCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Missile_Turret);
+        if (missiles.size() < 1 && missileBuildingCount < 1) {
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.CHOKE_POINT);
+            regionTypes.add(RegionType.BOUNDARY);
+            regionTypes.add(RegionType.EDGE);
+            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, true);
             if (newPos != null) {
-                BuildTask task = new BuildTask("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret);
-                task.setWorker(Workers.getBuilderWorker(Games.game.self(), newPos.toPosition()));
-                Builds.add(task);
+                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
+            }
+        } else if (missiles.size() < 45 && missileBuildingCount < 4) {
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.BOUNDARY);
+            regionTypes.add(RegionType.EDGE);
+            regionTypes.add(RegionType.CHOKE_POINT);
+            regionTypes.add(RegionType.MINERAL);
+            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, false);
+            if (newPos != null) {
+                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
             }
         }
 

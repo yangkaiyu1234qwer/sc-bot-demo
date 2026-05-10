@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 public class Times {
 
     // 每帧约40毫秒
-    public static final Integer BUILD_INTERVAL = 10;
+    public static final Integer BUILD_INTERVAL = 2;
 
     // 每20帧确认1次补给
     public static final Integer SUPPLY_INTERVAL = 5;

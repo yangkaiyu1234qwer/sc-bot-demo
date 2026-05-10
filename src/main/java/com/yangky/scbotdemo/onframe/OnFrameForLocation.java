@@ -1,7 +1,6 @@
 package com.yangky.scbotdemo.onframe;
 
 import com.yangky.scbotdemo.bwem.Locations;
-import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
 import org.springframework.stereotype.Component;
 
 
@@ -24,10 +23,7 @@ public class OnFrameForLocation extends OnFrame {
 
     @Override
     public void onFrame(Integer frame) {
-        if (!Locations.isInitialized()) {
-            Locations.initialize();
-            return;
-        }
+        Locations.initialize();
 //        // 添加调试信息
 //        int mapSize = Locations.getLocationMap().size();
 //        if (mapSize == 0) {
@@ -42,11 +38,11 @@ public class OnFrameForLocation extends OnFrame {
 //            System.out.println("[LocationDebug] 调试信息已绘制完成（仅首次输出）");
 //        }
     }
-//
 //    private void drawLocationDebug() {
 //        int drawCount = 0;
 //        for (Map.Entry<TilePosition, Location> entry : Locations.getLocationMap().entrySet()) {
 //            TilePosition pos = entry.getKey();
+//
 //            Location loc = entry.getValue();
 //            Position pixelPos = pos.toPosition().add(new Position(16, 16));
 //

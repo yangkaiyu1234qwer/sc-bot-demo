@@ -27,6 +27,8 @@ public class RegionsClassifier {
     private static final Set<TilePosition> centralPositionSet = new CopyOnWriteArraySet<>();
     @Getter
     private static TilePosition centralPosition;
+    @Getter
+    private static TilePosition chokePointPosition;
 
     public static void initialize() {
         if (initialized) {
@@ -44,6 +46,9 @@ public class RegionsClassifier {
                     .map(Map.Entry::getValue)
                     .map(WallOff::getList)
                     .orElse(new ArrayList<>());
+            if (wallOffs.stream().anyMatch(e -> e.getIdempotentNo().contains("secondBarrack"))) {
+                wallOffs.removeIf(e -> e.getIdempotentNo().contains("firstBarrack"));
+            }
             chokePointSet.addAll(wallOffs.stream()
                     .map(WallOffBuilding::getTilePosition)
                     .filter(Objects::nonNull)
@@ -106,7 +111,6 @@ public class RegionsClassifier {
         // 获取基地位置和矿物列表
         List<bwapi.Unit> minerals = getNearbyMinerals(basePos);
         // 对可达区域进行分类
-        int mineralCount = 0, edgeCount = 0, centralCount = 0, boundaryCount = 0;
         for (TilePosition pos : reachableArea) {
             RegionType type = classifyPosition(pos, basePos, minerals, boundarySet);
             RegionPosition regionPos = new RegionPosition();
@@ -118,14 +122,9 @@ public class RegionsClassifier {
             regionPos.setChokePoint(chokePoints.contains(pos));
             result.add(regionPos);
         }
-        if (DEBUG_ENABLED) {
-            System.out.println("[RegionClassifier] 分类完成: 矿区=" + mineralCount
-                    + ", 外圈=" + edgeCount
-                    + ", 核心=" + centralCount
-                    + ", 边界=" + boundaryCount);
-        }
         positions = result;
         calculateCentralAreaCenter();
+        calculateChokePointAreaCenter();
     }
 
     /**
@@ -153,6 +152,8 @@ public class RegionsClassifier {
             default:
                 break;
         }
+        drawXMark(chokePointPosition.toPosition(), 8, new Color(255, 0, 0));
+        drawXMark(centralPosition.toPosition(), 8, new Color(255, 0, 0));
     }
 
     /**
@@ -201,12 +202,12 @@ public class RegionsClassifier {
         if (boundarySet.contains(pos)) {
             return RegionType.BOUNDARY;
         }
-        // 1. 检查是否是矿区（矿物/气矿2格内 或 基地2格内）
+        // 1. 检查是否是矿区（矿物/气矿2格内 或 基地3格内）
         if (isMineralZone(pos, minerals, basePos)) {
             return RegionType.MINERAL;
         }
-        // 2. 检查是否是外圈（距离边界1格内）
-        if (calculateDistanceToBoundary(pos, boundarySet) == 1) {
+        // 2. 检查是否是外圈（距离边界2格内）
+        if (calculateDistanceToBoundary(pos, boundarySet) <= 3) {
             return RegionType.EDGE;
         }
         // 3. 核心圈（可建造的位置）
@@ -222,8 +223,8 @@ public class RegionsClassifier {
      * 检查是否是矿区
      */
     private static boolean isMineralZone(TilePosition pos, List<bwapi.Unit> minerals, TilePosition basePos) {
-        // 检查是否在基地2格内
-        if (pos.getApproxDistance(basePos) <= 2) {
+        // 检查是否在基地3格内
+        if (pos.getApproxDistance(basePos) <= 3) {
             return true;
         }
         // 检查是否在矿物/气矿2格内
@@ -253,6 +254,7 @@ public class RegionsClassifier {
         }
         return minDist;
     }
+
 
     /**
      * 判断是否是边界点
@@ -391,9 +393,34 @@ public class RegionsClassifier {
         System.out.println("[Locations] CENTRAL 中心点: " + centralPosition);
     }
 
+    private static void calculateChokePointAreaCenter() {
+        if (chokePointSet.isEmpty()) {
+            System.out.println("[Locations] 警告：CHOKE POINT 区域为空");
+            return;
+        }
+        // 取所有 CENTRAL 区域的 Tile 的平均值
+        int totalX = 0;
+        int totalY = 0;
+        int count = 0;
+        for (TilePosition pos : chokePointSet) {
+            totalX += pos.getX();
+            totalY += pos.getY();
+            count++;
+        }
+        if (count == 0) {
+            return;
+        }
+        chokePointPosition = new TilePosition(totalX / count, totalY / count);
+        System.out.println("[Locations] CHOKE POINT 中心点: " + chokePointPosition);
+    }
+
     public static void clear() {
         positions.clear();
         centralPositionSet.clear();
+    }
+
+    public static TilePosition getChokePointPosition() {
+        return chokePointPosition;
     }
 }
 

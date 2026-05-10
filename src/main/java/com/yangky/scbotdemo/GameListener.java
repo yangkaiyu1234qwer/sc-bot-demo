@@ -103,7 +103,13 @@ public class GameListener extends DefaultBWListener implements CommandLineRunner
 
     @Override
     public void onUnitComplete(Unit unit) {
-        super.onUnitCreate(unit);
+        if (Games.game != null
+                && unit.getPlayer() != null
+                && unit.getPlayer() == Games.game.self()
+                && unit.getType().isBuilding()
+                && !Units.isResource(unit.getType())) {
+            BuildExecutor.onUnitComplete(unit);
+        }
     }
 
     @Override
@@ -178,7 +184,7 @@ public class GameListener extends DefaultBWListener implements CommandLineRunner
         System.out.println("[清理] Units 集合已清理");
 
         // 5. 清理 Builds 任务列表
-        Builds.clearAll();
+//        Builds.clearAll();
         BuildExecutor.clear();
         System.out.println("[清理] Builds 任务列表已清理");
 

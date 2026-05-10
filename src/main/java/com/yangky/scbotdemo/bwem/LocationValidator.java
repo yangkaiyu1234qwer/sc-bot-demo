@@ -46,8 +46,9 @@ public class LocationValidator {
                 return false;
             }
         }
-        if (!hasNoBuildings(pos, building)) {
-            System.out.println("[LocationValidator] 有建筑占用: " + pos);
+        Unit conflict = positionConflict(pos, building);
+        if (conflict != null) {
+            System.out.println("[LocationValidator] 有建筑占用: " + pos + ", type=" + conflict.getType() + ", pos=" + conflict.getPosition());
             return false;
         }
         return true;
@@ -109,15 +110,10 @@ public class LocationValidator {
         for (int dx = -checkRange; dx <= buildWidth + checkRange; dx++) {
             for (int dy = -checkRange; dy <= buildHeight + checkRange; dy++) {
                 TilePosition checkTile = new TilePosition(pos.getX() + dx, pos.getY() + dy);
-
                 List<Unit> units = Games.game.getUnitsOnTile(checkTile);
                 for (Unit unit : units) {
                     UnitType type = unit.getType();
-                    if (type.isResourceContainer()
-                            || type == UnitType.Resource_Mineral_Field
-                            || type == UnitType.Resource_Mineral_Field_Type_2
-                            || type == UnitType.Resource_Mineral_Field_Type_3
-                            || type == UnitType.Resource_Vespene_Geyser) {
+                    if (Units.isResource(type)) {
                         return false;
                     }
                 }
@@ -126,16 +122,14 @@ public class LocationValidator {
         return true;
     }
 
-    private static boolean hasNoBuildings(TilePosition pos, UnitType building) {
+    public static Unit positionConflict(TilePosition pos, UnitType building) {
         int buildWidth = building.tileWidth();
         int buildHeight = building.tileHeight();
-
         List<bwapi.Unit> allUnits = Games.game.getAllUnits();
         for (bwapi.Unit unit : allUnits) {
             if (!unit.getType().isBuilding()) {
                 continue;
             }
-
             if (unit.getType().isResourceContainer() ||
                     unit.getType() == UnitType.Resource_Vespene_Geyser ||
                     unit.getType() == UnitType.Resource_Mineral_Field ||
@@ -143,22 +137,19 @@ public class LocationValidator {
                     unit.getType() == UnitType.Resource_Mineral_Field_Type_3) {
                 continue;
             }
-
             if (!unit.isCompleted() && !unit.isBeingConstructed()) {
                 continue;
             }
-
             TilePosition otherPos = unit.getTilePosition();
             UnitType otherType = unit.getType();
             int otherWidth = otherType.tileWidth();
             int otherHeight = otherType.tileHeight();
-
             if (isOverlapping(pos.getX(), pos.getY(), buildWidth, buildHeight,
                     otherPos.getX(), otherPos.getY(), otherWidth, otherHeight)) {
-                return false;
+                return unit;
             }
         }
-        return true;
+        return null;
     }
 
     /**

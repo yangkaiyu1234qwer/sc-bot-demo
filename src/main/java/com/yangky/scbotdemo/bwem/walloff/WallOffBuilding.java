@@ -6,8 +6,8 @@ import bwapi.Unit;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.BuildTiming;
 import com.yangky.scbotdemo.Callback;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Units;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 import lombok.Data;
 import lombok.ToString;
 
@@ -76,7 +76,7 @@ public class WallOffBuilding {
 
     private static boolean firstSupplyTiming(Game game) {
         int supplyUsed = game.self().supplyUsed();
-        long supplyBuilding = Builds.getCountByBuildingType(UnitType.Terran_Supply_Depot);
+        long supplyBuilding = BuildExecutor.getCountByBuildingType(UnitType.Terran_Supply_Depot);
         int supplyDepotExisted = Units.getSelfUnits(UnitType.Terran_Supply_Depot).size();
 /*        System.out.println("supplyUsed=" + supplyUsed
                 + "，supplyBuilding=" + supplyBuilding
@@ -88,7 +88,7 @@ public class WallOffBuilding {
 
     private static boolean firstBarrackTiming(Game game) {
         int supplyUsed = game.self().supplyUsed();
-        int barracksBuilding = Builds.getCountByBuildingType(UnitType.Terran_Barracks);
+        int barracksBuilding = BuildExecutor.getCountByBuildingType(UnitType.Terran_Barracks);
         int barrackExisted = Units.getSelfUnits(UnitType.Terran_Barracks).size();
 //        System.out.println("supplyUsed=" + supplyUsed
 //                + "，barracksExisted=" + barracksBuilding
@@ -103,7 +103,7 @@ public class WallOffBuilding {
         int supplyUsed = game.self().supplyUsed();
         // 造地堡需要兵营已建造
         long barrackCompleted = Units.getSelfUnits(UnitType.Terran_Barracks).stream().filter(Unit::isCompleted).count();
-        int bunkersBuilding = Builds.getCountByBuildingType(UnitType.Terran_Bunker);
+        int bunkersBuilding = BuildExecutor.getCountByBuildingType(UnitType.Terran_Bunker);
         long bunkersExisted = Units.getSelfUnits(UnitType.Terran_Bunker).size();
 //        System.out.println("supplyUsed=" + supplyUsed
 //                + "，barracksExisted=" + barrackCompleted
@@ -128,7 +128,7 @@ public class WallOffBuilding {
 
     private static boolean secondBarrackTiming(Game game) {
         int supplyUsed = game.self().supplyUsed();
-        int barracksBuilding = Builds.getCountByBuildingType(UnitType.Terran_Barracks);
+        int barracksBuilding = BuildExecutor.getCountByBuildingType(UnitType.Terran_Barracks);
         int barrackExisted = Units.getSelfUnits(UnitType.Terran_Barracks).size();
 //        System.out.println("supplyUsed=" + supplyUsed
 //                + "，barracksBuilding=" + barracksBuilding

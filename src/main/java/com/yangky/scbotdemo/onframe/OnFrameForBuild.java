@@ -1,6 +1,6 @@
 package com.yangky.scbotdemo.onframe;
 
-import com.yangky.scbotdemo.bwem.Builds;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 import com.yangky.scbotdemo.util.Times;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +20,7 @@ public class OnFrameForBuild extends OnFrame {
 
     @Override
     public void onFrame(Integer frame) {
-        Builds.consume();
+//        Builds.consume();
+        BuildExecutor.execute();
     }
 }

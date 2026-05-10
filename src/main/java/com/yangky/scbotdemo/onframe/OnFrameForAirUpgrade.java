@@ -5,10 +5,10 @@ import bwapi.Unit;
 import bwapi.UnitType;
 import bwapi.UpgradeType;
 import com.yangky.scbotdemo.bwem.Bases;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.util.Positions;
 import org.springframework.stereotype.Component;
 
@@ -46,7 +46,7 @@ public class OnFrameForAirUpgrade extends OnFrame {
         long completedArmories = Units.getSelfUnits(UnitType.Terran_Armory).stream()
                 .filter(Unit::isCompleted)
                 .count();
-        long buildingArmories = Builds.getCountByBuildingType(UnitType.Terran_Armory);
+        long buildingArmories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Armory);
         long armoryCount = completedArmories + buildingArmories;
 
         // 目标：造 2 个 Armory
@@ -55,7 +55,8 @@ public class OnFrameForAirUpgrade extends OnFrame {
                 // 使用 EdgePosition，Armory 通常放在边缘或腹地
                 bwapi.TilePosition pos = Positions.getEdgePosition(UnitType.Terran_Armory, base);
                 if (pos != null) {
-                    Builds.add(new BuildTask("armory_" + (i + 1), pos, UnitType.Terran_Armory, null));
+//                    Builds.add(new BuildTask("armory_" + (i + 1), pos, UnitType.Terran_Armory, null));
+                    BuildExecutor.add(Task.of("armory_" + (i + 1), pos, UnitType.Terran_Armory));
                 }
             }
         }

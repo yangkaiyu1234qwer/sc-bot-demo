@@ -7,17 +7,21 @@ import lombok.Getter;
 public enum TaskStatus {
     RETRYING(-1),           // 重试中
 
-    WAITING(0),            // 等待中
+    WAITING(0),             // 等待中
 
-    SCV_ASSIGNED(1),       // 已指派SCV
+    ASSIGN_POSITION(1),     // 指定坐标
 
-    POSITION_ASSIGNED(2),  // 已指定坐标
+    ASSIGN_SCV(2),          // 指派SCV
 
-    MOVING(3),             // 进行中
+    MOVING(3),              // 移动中
 
-    BUILDING(4),           // 建造中
+    PRE_BUILD(4),           // 准备建造
 
-    COMPLETED(5),          // 已完成
+    CONSTRUCTING(5),       // 正在建造
+
+    COMPLETED(6),          // 已完成
+
+    FAILED(7),             // 已失败
     ;
 
 

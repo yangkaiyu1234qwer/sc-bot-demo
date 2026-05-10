@@ -1,13 +1,12 @@
 package com.yangky.scbotdemo.bwem;
 
+import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.stream.Collectors;
 
 /**
  * 记录人族所有单位集合
@@ -55,7 +54,10 @@ public class Units {
     }
 
     public static Set<Unit> getSelfUnits(UnitType type) {
-        return selfUnitMap.getOrDefault(type, new CopyOnWriteArraySet<>());
+        return Games.game.self().getUnits().stream()
+                .filter(e -> e.getType() == type)
+                .collect(Collectors.toSet());
+//        return selfUnitMap.getOrDefault(type, new CopyOnWriteArraySet<>());
     }
 
     public static void destroyUnit(Unit unit) {
@@ -85,4 +87,27 @@ public class Units {
                 });
         return buildingUnits;
     }
+
+    public static Unit findBuildingAtPosition(TilePosition position, UnitType type) {
+        List<Unit> units = Games.game.getAllUnits().stream().
+                filter(u -> u.getType().isBuilding() && !isResource(u.getType()))
+                .collect(Collectors.toList());
+        return units.stream()
+                .filter(u -> {
+                    TilePosition unitPos = u.getTilePosition();
+                    boolean positionMatched = Math.abs(unitPos.getX() - position.getX()) <= 1
+                            && Math.abs(unitPos.getY() - position.getY()) <= 1;
+                    return positionMatched && (type != null && u.getType() == type);
+                })
+                .findFirst()
+                .orElse(null);
+    }
+
+    public static boolean isResource(UnitType type) {
+        return type == UnitType.Resource_Mineral_Field
+                || type == UnitType.Resource_Mineral_Field_Type_2
+                || type == UnitType.Resource_Mineral_Field_Type_3
+                || type == UnitType.Resource_Vespene_Geyser;
+    }
+
 }

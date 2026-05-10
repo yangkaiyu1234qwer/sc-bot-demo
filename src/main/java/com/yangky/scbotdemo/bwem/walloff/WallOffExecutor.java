@@ -3,10 +3,10 @@ package com.yangky.scbotdemo.bwem.walloff;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.util.Positions;
 
 import java.util.*;
@@ -70,9 +70,7 @@ public class WallOffExecutor {
         if (config == null || config.getTilePosition() == null) {
             return null;
         }
-
         TilePosition tilePos = config.getTilePosition();
-
         return Games.game.self().getUnits().stream()
                 .filter(u -> u.getType() == UnitType.Terran_Barracks)
                 .filter(u -> {
@@ -108,7 +106,7 @@ public class WallOffExecutor {
         rescueWaitFrames++;
         if (rescueWaitFrames >= 20) {//frame本身已经有帧数限制
             if (rescueBarracks.exists() && rescueBarracks.isFlying() && barracksLandPosition != null) {
-                if (!rescueBarracks.isIdle()) rescueBarracks.cancelTrain();
+                rescueBarracks.cancelTrain();
                 if (rescueBarracks.land(barracksLandPosition)) {
                     System.out.println("[救援] 兵营降落至: " + barracksLandPosition);
                 }
@@ -140,21 +138,20 @@ public class WallOffExecutor {
         updateRescue();
         if (!isWallOffFinished()) {
             wallOff.getList().forEach(e -> {
-                if (e.getTilePosition() == null) {
-                    e.setTilePosition(Positions.getEdgePosition(e.getUnitType(), base, 0));
-                }
                 if (completedBuildings.contains(e.getIdempotentNo())) {
                     return;
                 }
-                if (Builds.getTaskByIdempotent(e.getIdempotentNo()) == null && e.getBuildTiming().accept(Games.game)) {
+                if (BuildExecutor.getTaskByIdempotent(e.getIdempotentNo()) == null && e.getBuildTiming().accept(Games.game)) {
                     System.out.println("建造堵口建筑: " + e.getIdempotentNo() + " - " + e.getUnitType() + " at " + e.getTilePosition());
-                    BuildTask task = new BuildTask(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
+                    if (e.getTilePosition() == null) {
+                        e.setTilePosition(Positions.getEdgePosition(e.getUnitType(), base, 0));
+                    }
+                    BuildExecutor.add(Task.of(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
                         if (e.getCallback() != null) {
                             e.getCallback().execute();
                         }
                         markBuildingCompleted(e.getIdempotentNo());
-                    });
-                    Builds.add(task);
+                    }));
                 }
             });
         }

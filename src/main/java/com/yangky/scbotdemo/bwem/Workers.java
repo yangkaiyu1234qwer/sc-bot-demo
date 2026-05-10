@@ -7,6 +7,7 @@ import bwapi.UnitType;
 import bwem.Base;
 import bwem.Mineral;
 import bwem.Neutral;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
@@ -106,7 +107,7 @@ public class Workers {
     // ==================== 建筑工人管理 ====================
 
     public static void markAsExperiencedBuilder(Unit worker) {
-        if (worker != null) {
+        if (worker != null && experiencedBuilders.size() < 5) {
             experiencedBuilders.add(worker);
         }
     }
@@ -115,43 +116,6 @@ public class Workers {
         return experiencedBuilders.contains(worker);
     }
 
-    public static Unit getBuilderWorker(Player player, Position target) {
-        Unit bestBuilder = null;
-        int bestDist = Integer.MAX_VALUE;
-
-        for (Unit scv : experiencedBuilders) {
-            if (scv == null || !scv.exists() || !scv.isIdle()) {
-                continue;
-            }
-            if (!isReachable(scv)) {
-                continue;
-            }
-            int dist = scv.getTilePosition().getApproxDistance(target.toTilePosition());
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestBuilder = scv;
-            }
-        }
-
-        if (bestBuilder != null && bestDist <= 30) {
-            return bestBuilder;
-        }
-        return getAWorker(player, target);
-    }
-
-    public static Unit getRepairWorker(Player player, Unit damagedBuilding) {
-        for (Unit scv : repairCache.keySet()) {
-            if (scv != null && scv.exists() && scv.isIdle()) {
-                return scv;
-            }
-        }
-        for (Unit scv : experiencedBuilders) {
-            if (scv != null && scv.exists() && scv.isIdle()) {
-                return scv;
-            }
-        }
-        return getBuilderWorker(player, damagedBuilding.getPosition());
-    }
 
     private static boolean isReachable(Unit scv) {
         Unit mainBase = Bases.getMainBaseUnit();
@@ -190,22 +154,34 @@ public class Workers {
         return weight;
     }
 
-    public static Unit getAWorker(Player player, Position position) {
-        List<Unit> workers = player.getUnits().stream()
-                .filter(e -> e.getType().isWorker() && !e.isConstructing())
-                .filter(e -> !Builds.getBuildingWorkers().contains(e))
-                .filter(e -> !e.isGatheringGas() || e.isCarryingGas())
+    public static Unit getAWorker(Position position) {
+        Player self = Games.game.self();
+        List<Unit> workers = self.getUnits().stream()
+                .filter(e -> e.getType().isWorker() && !e.isConstructing() && !BuildExecutor.isOnTask(e))
+                .filter(e -> !e.isGatheringGas() || !e.isCarryingGas())
                 .sorted(Comparator.comparingInt(o -> getWeightToChooseForBuild(position, o)))
                 .collect(Collectors.toList());
-
         if (CollectionUtils.isEmpty(workers)) {
-            workers = player.getUnits().stream()
-                    .filter(e -> e.getType().isWorker())
-                    .filter(e -> !Builds.getBuildingWorkers().contains(e))
+            workers = self.getUnits().stream()
+                    .filter(e -> e.getType().isWorker() && !e.isConstructing()&& !BuildExecutor.isOnTask(e))
                     .sorted(Comparator.comparingInt(o -> getWeightToChooseForBuild(position, o)))
                     .collect(Collectors.toList());
         }
         return CollectionUtils.isEmpty(workers) ? null : workers.get(0);
+    }
+
+    public static Unit getRepairWorker(Unit damagedBuilding) {
+        for (Unit scv : repairCache.keySet()) {
+            if (scv != null && scv.exists() && scv.isIdle()) {
+                return scv;
+            }
+        }
+        for (Unit scv : experiencedBuilders) {
+            if (scv != null && scv.exists() && scv.isIdle()) {
+                return scv;
+            }
+        }
+        return getAWorker(damagedBuilding.getPosition());
     }
 
     public static List<Unit> getWorkersByMineral(Player player, Unit base) {
@@ -303,7 +279,9 @@ public class Workers {
     }
 
     public static void markRepairingWorker(Unit worker, Unit building) {
-        repairCache.put(worker, building);
+        if (repairCache.size() < 5) {
+            repairCache.put(worker, building);
+        }
     }
 
     public static boolean isRepairer(Unit worker) {

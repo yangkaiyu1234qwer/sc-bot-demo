@@ -5,16 +5,21 @@ import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Bases;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Supplies;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
+import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 import com.yangky.scbotdemo.bwem.walloff.WallOffExecutor;
 import com.yangky.scbotdemo.util.Positions;
 import com.yangky.scbotdemo.util.Properties;
 import com.yangky.scbotdemo.util.Times;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * SupplyOnframe
@@ -39,7 +44,7 @@ public class OnFrameForSupply extends OnFrame {
             return;
         }
         Player player = Games.game.self();
-        if (player.supplyTotal() >= 400) {
+        if (player.supplyTotal() >= 400 || player.supplyTotal() < 52) {
             return;
         }
         int supplyDeficit = Supplies.supplyDeficit(player);
@@ -49,7 +54,11 @@ public class OnFrameForSupply extends OnFrame {
             if (mainBase == null) return;
 
             // ✅ 优先使用 EdgePosition，失败后降级到 CentralPosition
-            TilePosition buildPos = Positions.getEdgePosition(supplyBuilding, mainBase);
+//            TilePosition buildPos = Positions.getEdgePosition(supplyBuilding, mainBase);
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.BOUNDARY);
+            regionTypes.add(RegionType.EDGE);
+            TilePosition buildPos = BuildingPlacer.findPosition(supplyBuilding, regionTypes, 0, 0, true);
             if (buildPos == null) {
                 System.out.println("[Supply] EdgePosition 失败，尝试 CentralPosition");
                 buildPos = Positions.getCentralPosition(supplyBuilding, mainBase.getTilePosition());
@@ -62,9 +71,8 @@ public class OnFrameForSupply extends OnFrame {
                 System.out.println("[Supply] ✗ 无法找到 Supply 位置！");
                 return;
             }
-
             String idempotentNo = "supply_from_" + player.supplyTotal() + "_to_" + (player.supplyTotal() + 8 * supplyDeficit);
-            Builds.add(new BuildTask(idempotentNo, buildPos, supplyBuilding));
+            BuildExecutor.add(Task.ofSupplyDepot(idempotentNo, buildPos));
         }
     }
 

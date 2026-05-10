@@ -2,11 +2,17 @@ package com.yangky.scbotdemo.onframe;
 
 
 import bwapi.*;
-import com.yangky.scbotdemo.bwem.*;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
-import com.yangky.scbotdemo.util.Positions;
+import com.yangky.scbotdemo.bwem.Bases;
+import com.yangky.scbotdemo.bwem.Games;
+import com.yangky.scbotdemo.bwem.Units;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
+import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -36,14 +42,16 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long completedStarports = Units.getSelfUnits(UnitType.Terran_Starport).stream()
                 .filter(Unit::isCompleted)
                 .count();
-        long buildingStarports = Builds.getCountByBuildingType(UnitType.Terran_Starport);
+        long buildingStarports = BuildExecutor.getCountByBuildingType(UnitType.Terran_Starport);
         long starportCount = completedStarports + buildingStarports;
 
         if (starportCount < 5) {
-            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Starport, Locations.getCentralAreaCenter().toPosition().toTilePosition());
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.CENTRAL);
+            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Starport, regionTypes, 0, 3, true);
             if (pos != null) {
                 String taskId = "starport_" + (starportCount + 1);
-                Builds.add(new BuildTask(taskId, pos, UnitType.Terran_Starport, null));
+                BuildExecutor.add(Task.of(taskId, pos, UnitType.Terran_Starport));
             }
         }
 
@@ -61,11 +69,15 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long completedFacilities = Units.getSelfUnits(UnitType.Terran_Science_Facility).stream()
                 .filter(Unit::isCompleted)
                 .count();
-        long buildingFacilities = Builds.getCountByBuildingType(UnitType.Terran_Science_Facility);
+        long buildingFacilities = BuildExecutor.getCountByBuildingType(UnitType.Terran_Science_Facility);
         long facilityCount = completedFacilities + buildingFacilities;
         if (facilityCount < 1) {
-            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, Locations.getCentralAreaCenter().toPosition().toTilePosition());
-            Builds.add(new BuildTask("facility_1", pos, UnitType.Terran_Science_Facility, null));
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.CENTRAL);
+            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Science_Facility, regionTypes, 1, 1, true);
+//            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, Locations.getCentralAreaCenter().toPosition().toTilePosition());
+//            Builds.add(new BuildTask("facility_1", pos, UnitType.Terran_Science_Facility, null));
+            BuildExecutor.add(Task.of("facility_1", pos, UnitType.Terran_Science_Facility));
         }
 
         // ==================== 3. 造科学研究院 (Physics Lab) ====================
@@ -73,7 +85,7 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long completedPhysicsLabs = Units.getSelfUnits(UnitType.Terran_Physics_Lab).stream()
                 .filter(Unit::isCompleted)
                 .count();
-        long buildingPhysicsLabs = Builds.getCountByBuildingType(UnitType.Terran_Physics_Lab);
+        long buildingPhysicsLabs = BuildExecutor.getCountByBuildingType(UnitType.Terran_Physics_Lab);
         long physicsLabCount = completedPhysicsLabs + buildingPhysicsLabs;
         // 至少有一个挂了 Control Tower 的 Starport 才能造 Physics Lab
         if (physicsLabCount < 1) {

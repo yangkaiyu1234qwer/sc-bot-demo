@@ -1,17 +1,16 @@
 package com.yangky.scbotdemo.onframe;
 
-import bwapi.Player;
-import bwapi.Position;
-import bwapi.Unit;
-import bwapi.UnitType;
+import bwapi.*;
 import bwem.Base;
-import com.yangky.scbotdemo.bwem.*;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
+import com.yangky.scbotdemo.bwem.Bases;
+import com.yangky.scbotdemo.bwem.Games;
+import com.yangky.scbotdemo.bwem.Workers;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.Task;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 
 /**
  * OnFrameForGas
@@ -54,11 +53,10 @@ public class OnFrameForGas extends OnFrame {
                         }
                     }
                 } else {
-                    Set<Unit> refineries = Units.getSelfUnits(UnitType.Terran_Refinery);
-                    if (refineries.size() < 1 && self.supplyUsed() >= 12) {
-                        Builds.add(new BuildTask("gas1", geyser.getUnit().getTilePosition(), UnitType.Terran_Refinery));
-                    } else if (refineries.size() < 2 && self.supplyUsed() >= 35) {
-                        Builds.add(new BuildTask("gas2", geyser.getUnit().getTilePosition(), UnitType.Terran_Refinery));
+                    Unit geyserUnit = geyser.getUnit();
+                    if (geyserUnit.getType() != UnitType.Terran_Refinery) {
+                        TilePosition pos = geyser.getUnit().getTilePosition();
+                        BuildExecutor.add(Task.of("gas_" + pos.getX() + "_" + pos.getY(), geyser.getUnit().getTilePosition(), UnitType.Terran_Refinery));
                     }
                 }
             });
@@ -73,7 +71,7 @@ public class OnFrameForGas extends OnFrame {
                 .filter(u -> u.getType().isWorker())
                 .filter(u -> u.isIdle() || u.isGatheringMinerals())  // 只选闲置或采矿的
                 .filter(u -> !Workers.isGasWorker(u))  // ✅ 排除已在采气的
-                .filter(u -> !Builds.getBuildingWorkers().contains(u))  // 排除建造中的
+                .filter(u -> !Workers.isBuilder(u))  // 排除建造中的
                 .min(Comparator.comparingInt(u -> u.getDistance(target)))
                 .orElse(null);
     }

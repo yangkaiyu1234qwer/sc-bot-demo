@@ -34,7 +34,7 @@ public class Actions {
 
         if (checkStuck(unit, target)) {
             System.out.println("[DEBUG] 检测到工人卡住，执行强制脱离: " + unit.getID());
-            forceBreakFree(unit, target);
+            forceBreakFree(unit);
             return true;
         }
 
@@ -42,7 +42,7 @@ public class Actions {
         if (blockingGeyser != null) {
             Position detourPos = calculateDetourPosition(unit.getPosition(), blockingGeyser.getPosition(), target);
             if (isValidPosition(detourPos)) {
-                System.out.println("[DEBUG] 检测到气矿阻挡，绕行至: " + detourPos);
+                System.out.println("[DEBUG] 检测到气矿" + blockingGeyser.getTilePosition() + "阻挡，绕行至: " + detourPos.toTilePosition());
                 return unit.rightClick(detourPos);
             }
         }
@@ -51,8 +51,7 @@ public class Actions {
         if (blockingBuilding != null) {
             Position detourPos = calculateDetourPosition(unit.getPosition(), blockingBuilding.getPosition(), target);
             if (isValidPosition(detourPos)) {
-                System.out.println("[DEBUG] 检测到建筑阻挡，绕行至: " + detourPos +
-                        " (Tile: " + new TilePosition(detourPos.getX()/32, detourPos.getY()/32) + ")");
+                System.out.println("[DEBUG] 检测到建筑" + blockingBuilding.getTilePosition() + "阻挡 建筑类型=" + blockingBuilding.getType() + ", position=" + target.toTilePosition() + "，绕行至: " + detourPos.toTilePosition());
                 return unit.rightClick(detourPos);
             }
         }
@@ -158,20 +157,57 @@ public class Actions {
         double toTargetX = target.getX() - currentPos.getX();
         double toTargetY = target.getY() - currentPos.getY();
 
-        double dx = currentPos.getX() - obstaclePos.getX();
-        double dy = currentPos.getY() - obstaclePos.getY();
+        // ✅ 尝试两个绕行方向：横向绕行和纵向绕行
+        Position horizontalDetour = calculateHorizontalDetour(obstaclePos, toTargetX);
+        Position verticalDetour = calculateVerticalDetour(obstaclePos, toTargetY);
 
-        int detourX, detourY;
-
-        if (Math.abs(dx) > Math.abs(dy)) {
-            detourY = toTargetY >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
-            detourX = 0;
-        } else {
-            detourX = toTargetX >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
-            detourY = 0;
+        if (horizontalDetour == null && verticalDetour == null) {
+            return null;
         }
 
+        if (horizontalDetour == null) {
+            return verticalDetour;
+        }
+
+        if (verticalDetour == null) {
+            return horizontalDetour;
+        }
+
+        // ✅ 选择距离目标更近的绕行点
+        double distToHorizontal = horizontalDetour.getDistance(target);
+        double distToVertical = verticalDetour.getDistance(target);
+
+        System.out.println("[DEBUG] 绕行方案对比 - 横向: " + horizontalDetour.toTilePosition()
+                + " (距离:" + (int) distToHorizontal + "), 纵向: " + verticalDetour.toTilePosition()
+                + " (距离:" + (int) distToVertical + ")");
+
+        return distToHorizontal <= distToVertical ? horizontalDetour : verticalDetour;
+    }
+
+    /**
+     * 计算横向绕行点（左右绕行）
+     */
+    private static Position calculateHorizontalDetour(Position obstaclePos, double toTargetX) {
+        int detourX = toTargetX >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
         int newX = obstaclePos.getX() + detourX;
+        int newY = obstaclePos.getY();
+
+        int mapWidth = Games.game.mapWidth() * 32;
+        int mapHeight = Games.game.mapHeight() * 32;
+
+        newX = Math.max(0, Math.min(newX, mapWidth));
+        newY = Math.max(0, Math.min(newY, mapHeight));
+
+        Position pos = new Position(newX, newY);
+        return isValidPosition(pos) ? pos : null;
+    }
+
+    /**
+     * 计算纵向绕行点（上下绕行）
+     */
+    private static Position calculateVerticalDetour(Position obstaclePos, double toTargetY) {
+        int detourY = toTargetY >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
+        int newX = obstaclePos.getX();
         int newY = obstaclePos.getY() + detourY;
 
         int mapWidth = Games.game.mapWidth() * 32;
@@ -180,10 +216,12 @@ public class Actions {
         newX = Math.max(0, Math.min(newX, mapWidth));
         newY = Math.max(0, Math.min(newY, mapHeight));
 
-        return new Position(newX, newY);
+        Position pos = new Position(newX, newY);
+        return isValidPosition(pos) ? pos : null;
     }
 
-    private static void forceBreakFree(Unit unit, Position target) {
+
+    public static void forceBreakFree(Unit unit) {
         int unitId = unit.getID();
         stuckFrames.put(unitId, 0);
 
@@ -248,6 +286,16 @@ public class Actions {
             return unit.returnCargo();
         }
         return false;
+    }
+
+    /**
+     * 清除指定工人的跟踪记录（用于建筑完成后重新移动）
+     */
+    public static void clearWorkerTracking(Unit unit) {
+        if (unit != null) {
+            lastPositions.remove(unit.getID());
+            stuckFrames.remove(unit.getID());
+        }
     }
 
     public static void clearWorkerTracking() {

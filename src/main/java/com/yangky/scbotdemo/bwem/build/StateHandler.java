@@ -13,4 +13,9 @@ public abstract class StateHandler implements InitializingBean {
     public abstract TaskStatus accessStatus();
 
     public abstract void process(Task task);
+
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        BuildExecutor.handleRegister(this);
+    }
 }

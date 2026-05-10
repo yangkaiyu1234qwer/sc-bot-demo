@@ -5,11 +5,15 @@ import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Bases;
-import com.yangky.scbotdemo.bwem.Builds;
 import com.yangky.scbotdemo.bwem.Games;
-import com.yangky.scbotdemo.bwem.task.BuildTask;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
+import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -23,7 +27,7 @@ import java.util.Random;
 @Component
 public class OnFrameForSupplyFallback extends OnFrame {
 
-    private static final long STUCK_SUPPLY_THRESHOLD_MS = 2 * 60 * 1000; // 3分钟
+    private static final long STUCK_SUPPLY_THRESHOLD_MS = 90 * 1000; // 1分半
 
     private Long stuckSupplyStartTime = null;  // 卡人口开始时间
     private int lastSupplyTotal = 0;            // 上次的人口上限
@@ -63,9 +67,9 @@ public class OnFrameForSupplyFallback extends OnFrame {
                 System.out.println("[SupplyFallback] 检测到卡人口，开始计时... ");
             } else {
                 long stuckDuration = System.currentTimeMillis() - stuckSupplyStartTime;
-                // 超过3分钟，触发兜底
+                // 超过1分半，触发兜底
                 if (stuckDuration >= STUCK_SUPPLY_THRESHOLD_MS && !fallbackTriggered) {
-                    System.out.println("[SupplyFallback] ⚠️ 卡人口超过2分钟！触发兜底任务...");
+                    System.out.println("[SupplyFallback] ⚠️ 卡人口超过1分半！触发兜底任务...");
                     triggerFallbackSupply(player);
                     fallbackTriggered = true;
                 } else if (stuckDuration % 30000 < 100) { // 每30秒打印一次进度
@@ -94,17 +98,19 @@ public class OnFrameForSupplyFallback extends OnFrame {
         TilePosition basePos = mainBase.getTilePosition();
         // ✅ 使用 BWEM 的方式：在基地周围随机选2个位置
         for (int i = 0; i < 2; i++) {
-            TilePosition randomPos = generateRandomPositionNearBase(basePos);
-            if (randomPos != null && Games.isBuildable(randomPos)) {
-                String taskId = "fallback_supply_" + System.currentTimeMillis() + "_" + i;
-                BuildTask task = new BuildTask(taskId, randomPos, UnitType.Terran_Supply_Depot, null);
-                Builds.add(task);
-                System.out.println("[SupplyFallback] ✓ 兜底 Supply 任务已添加: " + randomPos);
-            } else {
-                System.out.println("[SupplyFallback] ✗ 随机位置不可建造，尝试下一个...");
-            }
+            String taskId = "fallback_supply_" + System.currentTimeMillis() + "_" + i;
+//                BuildTask task = new BuildTask(taskId, randomPos, UnitType.Terran_Supply_Depot, null);
+//                Builds.add(task);
+            Task task = Task.ofSupplyDepot(taskId, null);
+            List<RegionType> regionTypeList = new ArrayList<>();
+            regionTypeList.add(RegionType.BOUNDARY);
+            regionTypeList.add(RegionType.EDGE);
+            task.setPosition(BuildingPlacer.findPosition(UnitType.Terran_Supply_Depot, regionTypeList, 0, 0, true));
+            BuildExecutor.add(task);
+            System.out.println("[SupplyFallback] ✓ 兜底 Supply 任务已添加 ");
         }
     }
+
 
     /**
      * 在基地周围生成随机位置（半径 10-25 格）

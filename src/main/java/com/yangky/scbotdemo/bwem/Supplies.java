@@ -2,6 +2,7 @@ package com.yangky.scbotdemo.bwem;
 
 import bwapi.Player;
 import bwapi.UnitType;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 
 /**
  * SupplyUtils
@@ -45,7 +46,7 @@ public class Supplies {
             }
         }
         // 减去已经在建造的补给站数量
-        int buildingCount = Builds.getCountByBuildingType(getSupplyUnitType(self));
+        int buildingCount = BuildExecutor.getCountByBuildingType(getSupplyUnitType(self));
         deficit = Math.max(deficit - buildingCount, 0);
         if (deficit > 0) {
             System.out.println("[补给站] 触发建造");
