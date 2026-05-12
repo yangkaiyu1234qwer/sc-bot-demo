@@ -95,12 +95,8 @@ public class OnFrameForSupplyFallback extends OnFrame {
             System.out.println("[SupplyFallback] ✗ 未找到主基地，兜底失败");
             return;
         }
-        TilePosition basePos = mainBase.getTilePosition();
-        // ✅ 使用 BWEM 的方式：在基地周围随机选2个位置
         for (int i = 0; i < 2; i++) {
             String taskId = "fallback_supply_" + System.currentTimeMillis() + "_" + i;
-//                BuildTask task = new BuildTask(taskId, randomPos, UnitType.Terran_Supply_Depot, null);
-//                Builds.add(task);
             Task task = Task.ofSupplyDepot(taskId, null);
             List<RegionType> regionTypeList = new ArrayList<>();
             regionTypeList.add(RegionType.EDGE);
@@ -108,13 +104,5 @@ public class OnFrameForSupplyFallback extends OnFrame {
             BuildExecutor.add(task);
             System.out.println("[SupplyFallback] ✓ 兜底 Supply 任务已添加 ");
         }
-    }
-
-
-    /**
-     * 在基地周围生成随机位置（半径 10-25 格）
-     */
-    private TilePosition generateRandomPositionNearBase(TilePosition basePos) {
-        return Games.game.getBuildLocation(UnitType.Terran_Supply_Depot, basePos, random.nextInt(15) + 10);
     }
 }

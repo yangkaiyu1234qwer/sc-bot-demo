@@ -4,7 +4,6 @@ package com.yangky.scbotdemo.bwem.build;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
-import bwem.Base;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yangky.scbotdemo.bwem.*;
@@ -130,22 +129,12 @@ public class BuildingPlacer {
         return findPosition(building, primaryRegion, xOffset, yOffset, fallbackRegions, allowBWAPIFallback);
     }
 
-    /**
-     * 尝试在指定区域内放置建筑
-     *
-     * @param building   建筑类型
-     * @param regionType 区域类型
-     * @param xOffset    X方向偏移
-     * @param yOffset    Y方向偏移
-     * @return 合适的 TilePosition
-     */
     private static TilePosition tryPlaceInRegion(UnitType building, RegionType regionType, int xOffset, int yOffset) {
-        // 获取区域内的所有可建造位置
         Set<TilePosition> regionPositions = Locations.getPositionsByRegion(regionType);
         if (regionPositions.isEmpty()) {
             return null;
         }
-        // 计算区域中心点
+
         TilePosition center = null;
         if (regionType == RegionType.CENTRAL) {
             center = RegionsClassifier.getCentralPosition();
@@ -157,7 +146,7 @@ public class BuildingPlacer {
                 center = new TilePosition(bunker.getTilePosition().getX(), bunker.getTilePosition().getY());
             }
         }
-        // 确定起始搜索点
+
         if (center == null) {
             List<TilePosition> list = RegionsClassifier.getPositions().stream()
                     .map(e -> new TilePosition(e.getX(), e.getY()))
@@ -171,8 +160,44 @@ public class BuildingPlacer {
                 center = Positions.getEdgePosition(building, Bases.getMainBaseUnit());
             }
         }
-        // 执行 BFS 搜索
+
+        if (regionType == RegionType.EDGE || regionType == RegionType.BOUNDARY) {
+            return directScanForEdgeOrMineral(building, regionPositions, xOffset, yOffset, center);
+        }
+
         return bfsSearch(building, center, regionPositions, xOffset, yOffset);
+    }
+
+    private static TilePosition directScanForEdgeOrMineral(UnitType building,
+                                                           Set<TilePosition> regionPositions,
+                                                           int xOffset, int yOffset,
+                                                           TilePosition referencePoint) {
+        int buildWidth = building.tileWidth() + xOffset;
+        int buildHeight = building.tileHeight() + yOffset;
+        List<TilePosition> validCandidates = new ArrayList<>();
+        for (TilePosition pos : regionPositions) {
+            if (canPlaceBuilding(pos, buildWidth, buildHeight, regionPositions, building)
+                    && !cache.asMap().containsKey(pos)) {
+                validCandidates.add(pos);
+            }
+        }
+        if (validCandidates.isEmpty()) {
+            return null;
+        }
+        validCandidates.sort((p1, p2) -> {
+            int dist1 = referencePoint != null ? p1.getApproxDistance(referencePoint) : 0;
+            int dist2 = referencePoint != null ? p2.getApproxDistance(referencePoint) : 0;
+            int mapWidth = Games.game.mapWidth();
+            int mapHeight = Games.game.mapHeight();
+            int edgeDist1 = Math.min(Math.min(p1.getX(), mapWidth - 1 - p1.getX()),
+                    Math.min(p1.getY(), mapHeight - 1 - p1.getY()));
+            int edgeDist2 = Math.min(Math.min(p2.getX(), mapWidth - 1 - p2.getX()),
+                    Math.min(p2.getY(), mapHeight - 1 - p2.getY()));
+            double score1 = edgeDist1 * 0.7 - dist1 * 0.3;
+            double score2 = edgeDist2 * 0.7 - dist2 * 0.3;
+            return Double.compare(score1, score2);
+        });
+        return validCandidates.get(0);
     }
 
     /**
@@ -230,22 +255,16 @@ public class BuildingPlacer {
 
     private static boolean canPlaceBuilding(TilePosition pos, int requiredWidth, int requiredHeight,
                                             Set<TilePosition> regionPositions, UnitType building) {
-        // ✅ 先验证起始位置是否合法（使用 LocationValidator）
         if (!LocationValidator.isValid(pos, building)) {
             return false;
         }
-
-        // 检查建筑占据的所有格子（包括偏移量）是否在区域内且可建造
         for (int dx = 0; dx < requiredWidth; dx++) {
             for (int dy = 0; dy < requiredHeight; dy++) {
                 TilePosition tile = new TilePosition(pos.getX() + dx, pos.getY() + dy);
 
-                // 检查是否在区域内
                 if (!regionPositions.contains(tile)) {
                     return false;
                 }
-
-                // 检查是否可建造（只检查地形，不重复调用 isValid）
                 if (!Games.isBuildable(tile)) {
                     return false;
                 }

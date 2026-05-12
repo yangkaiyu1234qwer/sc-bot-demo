@@ -203,7 +203,7 @@ public class RegionsClassifier {
         if (boundarySet.contains(pos)) {
             return RegionType.BOUNDARY;
         }
-        // 1. 检查是否是矿区（矿物/气矿2格内 或 基地3格内）
+        // 1. 检查是否是矿区（矿物/气矿1格内 或 基地3格内）
         if (isMineralZone(pos, minerals, basePos)) {
             return RegionType.MINERAL;
         }
@@ -224,14 +224,14 @@ public class RegionsClassifier {
      * 检查是否是矿区
      */
     private static boolean isMineralZone(TilePosition pos, List<bwapi.Unit> minerals, TilePosition basePos) {
-        // 检查是否在基地3格内
-        if (pos.getApproxDistance(basePos) <= 3) {
+        // 检查是否在基地5格内
+        if (pos.getApproxDistance(basePos) <= 5) {
             return true;
         }
-        // 检查是否在矿物/气矿2格内
+        // 检查是否在矿物/气矿1格内
         for (bwapi.Unit mineral : minerals) {
             TilePosition mineralPos = mineral.getTilePosition();
-            if (pos.getApproxDistance(mineralPos) <= 2) {
+            if (pos.getApproxDistance(mineralPos) <= 1) {
                 return true;
             }
         }

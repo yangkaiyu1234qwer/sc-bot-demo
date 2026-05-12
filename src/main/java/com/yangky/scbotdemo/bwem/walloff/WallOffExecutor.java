@@ -147,9 +147,7 @@ public class WallOffExecutor {
                     if (e.getTilePosition() == null) {
                         List<RegionType> regionTypes = new ArrayList<>();
                         regionTypes.add(RegionType.EDGE);
-                        regionTypes.add(RegionType.BOUNDARY);
-                        regionTypes.add(RegionType.CENTRAL);
-                        e.setTilePosition(BuildingPlacer.findPosition(e.getUnitType(), regionTypes, 3, 0, true));
+                        e.setTilePosition(BuildingPlacer.findPosition(e.getUnitType(), regionTypes, 0, 0, true));
                     }
                     BuildExecutor.add(Task.of(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
                         if (e.getCallback() != null) {
