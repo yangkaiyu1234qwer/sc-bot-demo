@@ -1,10 +1,8 @@
 package com.yangky.scbotdemo.bwem.build.handler;
 
 import bwapi.TilePosition;
-import bwapi.Unit;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Actions;
-import com.yangky.scbotdemo.bwem.LocationValidator;
 import com.yangky.scbotdemo.bwem.build.StateHandler;
 import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.bwem.build.TaskStatus;
@@ -30,13 +28,7 @@ public class MovingHandler extends StateHandler {
             // 已到达，修改状态去建造
             task.setStatus(TaskStatus.PRE_BUILD);
         } else {
-            // 未到达，校验目标位置是否被占用
-            Unit conflict = LocationValidator.positionConflict(task.getPosition(), task.getBuildingType());
-            if (conflict != null) {
-                task.setStatus(TaskStatus.ASSIGN_POSITION);
-                return;
-            }
+            Actions.smartMove(task.getWorker(), task.getPosition());
         }
-        Actions.smartMove(task.getWorker(), task.getPosition());
     }
 }

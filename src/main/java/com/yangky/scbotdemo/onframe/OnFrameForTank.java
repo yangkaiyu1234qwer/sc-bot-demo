@@ -1,10 +1,10 @@
 package com.yangky.scbotdemo.onframe;
 
 import bwapi.*;
+import com.yangky.scbotdemo.BuildTiming;
 import com.yangky.scbotdemo.bwem.*;
-import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
-import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.build.*;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
@@ -36,16 +36,14 @@ public class OnFrameForTank extends OnFrame {
         long buildingFactories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Factory);
         long factoryCount = completedFactories + buildingFactories;
         if (self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.CENTRAL);
-            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 3, 0, true);
-            if (factoryCount < 1) {
-                BuildExecutor.add(Task.of("factory_" + 1, pos, UnitType.Terran_Factory));
-            } else if (factoryCount < 2) {
-                BuildExecutor.add(Task.of("factory_" + 2, pos, UnitType.Terran_Factory));
-            }
+//            List<RegionType> regionTypes = new ArrayList<>();
+//            regionTypes.add(RegionType.CENTRAL);
+//            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 3, 0, true);
+            BuildTiming timing = game -> self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40;
+            BuildingDemandManager.declare(UnitType.Terran_Factory, 2,
+                    RegionStrategy.forTypes(RegionType.CENTRAL), timing, null, 3, 0);
         }
-        // 造BE
+        // 造BEb
         long barracksCount = Units.getSelfUnits(UnitType.Terran_Barracks).stream().filter(Unit::isCompleted).count();
         long engineerCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Engineering_Bay) +
                 Units.getSelfUnits(UnitType.Terran_Engineering_Bay).stream().filter(Unit::isCompleted).count();

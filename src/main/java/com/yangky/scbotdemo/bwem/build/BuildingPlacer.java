@@ -7,9 +7,9 @@ import bwapi.UnitType;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yangky.scbotdemo.bwem.*;
+import com.yangky.scbotdemo.bwem.build.handler.AssignPositionHandler;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
-import com.yangky.scbotdemo.util.Positions;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -129,12 +129,12 @@ public class BuildingPlacer {
         return findPosition(building, primaryRegion, xOffset, yOffset, fallbackRegions, allowBWAPIFallback);
     }
 
-    private static TilePosition tryPlaceInRegion(UnitType building, RegionType regionType, int xOffset, int yOffset) {
+    private static synchronized TilePosition tryPlaceInRegion(UnitType building, RegionType regionType, int xOffset, int yOffset) {
         Set<TilePosition> regionPositions = Locations.getPositionsByRegion(regionType);
         if (regionPositions.isEmpty()) {
             return null;
         }
-
+        regionPositions = regionPositions.stream().filter(pos -> !AssignPositionHandler.getPositionCache().containsKey(pos)).collect(Collectors.toSet());
         TilePosition center = null;
         if (regionType == RegionType.CENTRAL) {
             center = RegionsClassifier.getCentralPosition();
@@ -146,25 +146,13 @@ public class BuildingPlacer {
                 center = new TilePosition(bunker.getTilePosition().getX(), bunker.getTilePosition().getY());
             }
         }
-
         if (center == null) {
-            List<TilePosition> list = RegionsClassifier.getPositions().stream()
-                    .map(e -> new TilePosition(e.getX(), e.getY()))
-                    .collect(Collectors.toList());
-            int random = (int) (Math.random() * list.size());
-            center = list.get(random);
-            if (center == null) {
-                center = getRandomEdgePosition(regionPositions);
-            }
-            if (center == null) {
-                center = Positions.getEdgePosition(building, Bases.getMainBaseUnit());
-            }
+            center = Bases.getMainBaseUnit().getTilePosition();
         }
 
         if (regionType == RegionType.EDGE || regionType == RegionType.BOUNDARY) {
             return directScanForEdgeOrMineral(building, regionPositions, xOffset, yOffset, center);
         }
-
         return bfsSearch(building, center, regionPositions, xOffset, yOffset);
     }
 

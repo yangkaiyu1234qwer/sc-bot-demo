@@ -4,6 +4,7 @@ package com.yangky.scbotdemo.bwem;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
+import com.yangky.scbotdemo.bwem.build.handler.AssignPositionHandler;
 
 import java.util.List;
 
@@ -122,9 +123,20 @@ public class LocationValidator {
         return true;
     }
 
-    public static Unit positionConflict(TilePosition pos, UnitType building) {
+    public static synchronized Unit positionConflict(TilePosition pos, UnitType building) {
         int buildWidth = building.tileWidth();
         int buildHeight = building.tileHeight();
+
+        boolean conflict = AssignPositionHandler.getPositionCache().entrySet().stream().anyMatch(e -> {
+            UnitType otherType = e.getValue().getBuildingType();
+            int otherWidth = otherType.tileWidth();
+            int otherHeight = otherType.tileHeight();
+            return isOverlapping(pos.getX(), pos.getY(), buildWidth, buildHeight,
+                    e.getKey().getX(), e.getKey().getY(), otherWidth, otherHeight);
+        });
+        if (conflict) {
+            return null;
+        }
         List<bwapi.Unit> allUnits = Games.game.getAllUnits();
         for (bwapi.Unit unit : allUnits) {
             if (!unit.getType().isBuilding()) {
