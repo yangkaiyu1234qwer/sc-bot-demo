@@ -21,7 +21,7 @@ public class WaitingHandler extends StateHandler {
     @Override
     public void process(Task task) {
         System.out.println("[DEBUG] WaitingHandler 处理任务: " + task.getIdempotentNo());
-        task.setStatus(TaskStatus.ASSIGN_SCV);
+        task.setStatus(TaskStatus.ASSIGN_POSITION);
     }
 
 }

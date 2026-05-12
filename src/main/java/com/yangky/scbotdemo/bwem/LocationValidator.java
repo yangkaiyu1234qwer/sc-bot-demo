@@ -4,9 +4,11 @@ package com.yangky.scbotdemo.bwem;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
+import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.bwem.build.handler.AssignPositionHandler;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * LocationValidator - 统一的位置验证器
@@ -19,37 +21,34 @@ public class LocationValidator {
 
     /**
      * 统一的位置验证入口
-     *
-     * @param pos      待验证的地块位置
-     * @param building 建筑类型
-     * @return 是否可用
      */
-    public static boolean isValid(TilePosition pos, UnitType building) {
-        if (pos == null || building == null) {
+    public static boolean isValid(TilePosition pos, Task task) {
+        UnitType buildingType = task.getBuildingType();
+        if (pos == null || buildingType == null) {
             return false;
         }
-        if (!isInMapBounds(pos, building)) {
-            System.out.println("[LocationValidator] 超出地图边界: " + pos);
+        if (!isInMapBounds(pos, buildingType)) {
+            System.out.println("[LocationValidator] 超出地图边界: " + pos + ", task=" + task.getIdempotentNo());
             return false;
         }
-        if (building != UnitType.Terran_Refinery) {
-            if (!isBuildableTerrain(pos, building)) {
-                System.out.println("[LocationValidator] 地形不可建造: " + pos);
+        if (buildingType != UnitType.Terran_Refinery) {
+            if (!isBuildableTerrain(pos, buildingType)) {
+                System.out.println("[LocationValidator] 地形不可建造: " + pos + ", task=" + task.getIdempotentNo());
                 return false;
             }
-            if (!hasNoResourcesNearby(pos, building)) {
-                System.out.println("[LocationValidator] 附近有资源: " + pos);
+            if (!hasNoResourcesNearby(pos, buildingType)) {
+                System.out.println("[LocationValidator] 附近有资源: " + pos + ", task=" + task.getIdempotentNo());
                 return false;
             }
         } else {
             if (!hasGeyserAt(pos)) {
-                System.out.println("[LocationValidator] 位置没有气矿: " + pos);
+                System.out.println("[LocationValidator] 位置没有气矿: " + pos + ", task=" + task.getIdempotentNo());
                 return false;
             }
         }
-        Unit conflict = positionConflict(pos, building);
+        Unit conflict = buildingConflict(pos, task);
         if (conflict != null) {
-            System.out.println("[LocationValidator] 有建筑占用: " + pos + ", type=" + conflict.getType() + ", pos=" + conflict.getPosition());
+            System.out.println("[LocationValidator] 有建筑占用: " + pos + ", type=" + conflict.getType() + ", pos=" + conflict.getPosition()+ ", task=" + task.getIdempotentNo());
             return false;
         }
         return true;
@@ -123,20 +122,26 @@ public class LocationValidator {
         return true;
     }
 
-    public static synchronized Unit positionConflict(TilePosition pos, UnitType building) {
-        int buildWidth = building.tileWidth();
-        int buildHeight = building.tileHeight();
+    public static synchronized Task taskConflict(Task task) {
+        int buildWidth = task.getBuildingType().tileWidth();
+        int buildHeight = task.getBuildingType().tileHeight();
+        return AssignPositionHandler.getPositionCache().entrySet().stream()
+                .filter(e -> task != e.getValue())
+                .filter(e -> {
+                    UnitType otherType = e.getValue().getBuildingType();
+                    int otherWidth = otherType.tileWidth();
+                    int otherHeight = otherType.tileHeight();
+                    return isOverlapping(task.getPosition().getX(), task.getPosition().getY(), buildWidth, buildHeight,
+                            e.getKey().getX(), e.getKey().getY(), otherWidth, otherHeight);
+                })
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
+    }
 
-        boolean conflict = AssignPositionHandler.getPositionCache().entrySet().stream().anyMatch(e -> {
-            UnitType otherType = e.getValue().getBuildingType();
-            int otherWidth = otherType.tileWidth();
-            int otherHeight = otherType.tileHeight();
-            return isOverlapping(pos.getX(), pos.getY(), buildWidth, buildHeight,
-                    e.getKey().getX(), e.getKey().getY(), otherWidth, otherHeight);
-        });
-        if (conflict) {
-            return null;
-        }
+    public static synchronized Unit buildingConflict(TilePosition pos, Task task) {
+        int buildWidth = task.getBuildingType().tileWidth();
+        int buildHeight = task.getBuildingType().tileHeight();
         List<bwapi.Unit> allUnits = Games.game.getAllUnits();
         for (bwapi.Unit unit : allUnits) {
             if (!unit.getType().isBuilding()) {
@@ -161,8 +166,34 @@ public class LocationValidator {
                 return unit;
             }
         }
+        // 检查正在建造该建筑的工人（排除当前任务的工人）
+        for (bwapi.Unit unit : allUnits) {
+            if (!unit.getType().isWorker()) {
+                continue;
+            }
+            if (!unit.isConstructing()) {
+                continue;
+            }
+            // 如果是当前任务的工人，跳过
+            if (task.getWorker() != null && unit == task.getWorker()) {
+                continue;
+            }
+            bwapi.Unit target = unit.getOrderTarget();
+            if (target != null && target.getType() == task.getBuildingType()) {
+                TilePosition targetPos = target.getTilePosition();
+                if (targetPos != null) {
+                    int otherWidth = task.getBuildingType().tileWidth();
+                    int otherHeight = task.getBuildingType().tileHeight();
+                    if (isOverlapping(pos.getX(), pos.getY(), buildWidth, buildHeight,
+                            targetPos.getX(), targetPos.getY(), otherWidth, otherHeight)) {
+                        return unit;
+                    }
+                }
+            }
+        }
         return null;
     }
+
 
     /**
      * 检查两个矩形是否重叠

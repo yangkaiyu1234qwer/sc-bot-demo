@@ -1,16 +1,15 @@
 package com.yangky.scbotdemo.onframe;
 
 import bwapi.*;
-import com.yangky.scbotdemo.BuildTiming;
 import com.yangky.scbotdemo.bwem.*;
-import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
-import com.yangky.scbotdemo.bwem.build.*;
+import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingDemand;
+import com.yangky.scbotdemo.bwem.build.BuildingDemandManager;
+import com.yangky.scbotdemo.bwem.build.RegionStrategy;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -39,22 +38,25 @@ public class OnFrameForTank extends OnFrame {
 //            List<RegionType> regionTypes = new ArrayList<>();
 //            regionTypes.add(RegionType.CENTRAL);
 //            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 3, 0, true);
-            BuildTiming timing = game -> self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40;
-            BuildingDemandManager.declare(UnitType.Terran_Factory, 2,
-                    RegionStrategy.forTypes(RegionType.CENTRAL), timing, null, 3, 0);
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.CENTRAL);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Factory, 2, strategy, 3, 1, false);
+            demand.setBuildTiming(game -> self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40);
+            BuildingDemandManager.declare(demand);
         }
         // 造BEb
         long barracksCount = Units.getSelfUnits(UnitType.Terran_Barracks).stream().filter(Unit::isCompleted).count();
         long engineerCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Engineering_Bay) +
                 Units.getSelfUnits(UnitType.Terran_Engineering_Bay).stream().filter(Unit::isCompleted).count();
-        if (engineerCount < 1 && barracksCount > 0 && factoryCount > 0 && self.supplyUsed() >= 60) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.CENTRAL);
-            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Engineering_Bay, regionTypes, 0, 0, true);
+        if (engineerCount < 2 && barracksCount > 0 && factoryCount > 0 && self.supplyUsed() >= 60) {
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.EDGE, RegionType.CENTRAL);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Engineering_Bay, 2, strategy, 1, 1, true);
+            demand.setBuildTiming(game -> self.minerals() >= 100 && self.supplyUsed() >= 40);
+            BuildingDemandManager.declare(demand);
+//            List<RegionType> regionTypes = new ArrayList<>();
+//            regionTypes.add(RegionType.CENTRAL);
+//            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Engineering_Bay, regionTypes, 0, 0, true);
 //            Builds.add(new BuildTask("engineer_" + (++engineerCount), pos, UnitType.Terran_Engineering_Bay, null));
-            BuildExecutor.add(Task.of("engineerCount", pos, UnitType.Terran_Engineering_Bay));
-        } else {
-            Units.getSelfUnits(UnitType.Terran_Engineering_Bay).forEach(Unit::lift);
+//            BuildExecutor.add(Task.of("engineerCount", pos, UnitType.Terran_Engineering_Bay));
         }
 
         // 放附件 - 使用重试机制
@@ -126,28 +128,35 @@ public class OnFrameForTank extends OnFrame {
             }
         }
         // 边缘区域修防空
-        Set<Unit> missiles = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
-        int missileBuildingCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Missile_Turret);
-        if (missiles.size() < 1 && missileBuildingCount < 1) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.CHOKE_POINT);
-            regionTypes.add(RegionType.BOUNDARY);
-            regionTypes.add(RegionType.EDGE);
-            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, true);
-            if (newPos != null) {
-                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
-            }
-        } else if (missiles.size() < 45 && missileBuildingCount < 4) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.BOUNDARY);
-            regionTypes.add(RegionType.EDGE);
-            regionTypes.add(RegionType.CHOKE_POINT);
-            regionTypes.add(RegionType.MINERAL);
-            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, false);
-            if (newPos != null) {
-                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
-            }
+        int missileTurretDemand = (int) Math.ceil(self.supplyUsed() / 20.0);
+        if (missileTurretDemand > 0) {
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.CHOKE_POINT, RegionType.BOUNDARY, RegionType.EDGE);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Missile_Turret, missileTurretDemand, strategy);
+            demand.setAllowBWAPIFallback(true);
+            BuildingDemandManager.declare(demand);
         }
+//        Set<Unit> missiles = Units.getSelfUnits(UnitType.Terran_Missile_Turret);
+//        int missileBuildingCount = BuildExecutor.getCountByBuildingType(UnitType.Terran_Missile_Turret);
+//        if (missiles.size() < 1 && missileBuildingCount < 1) {
+//            List<RegionType> regionTypes = new ArrayList<>();
+//            regionTypes.add(RegionType.CHOKE_POINT);
+//            regionTypes.add(RegionType.BOUNDARY);
+//            regionTypes.add(RegionType.EDGE);
+//            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, true);
+//            if (newPos != null) {
+//                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
+//            }
+//        } else if (missiles.size() < 45 && missileBuildingCount < 4) {
+//            List<RegionType> regionTypes = new ArrayList<>();
+//            regionTypes.add(RegionType.BOUNDARY);
+//            regionTypes.add(RegionType.EDGE);
+//            regionTypes.add(RegionType.CHOKE_POINT);
+//            regionTypes.add(RegionType.MINERAL);
+//            TilePosition newPos = BuildingPlacer.findPosition(UnitType.Terran_Missile_Turret, regionTypes, 3, 3, false);
+//            if (newPos != null) {
+//                BuildExecutor.add(Task.of("missiles_turret_" + missiles.size() + 1, newPos, UnitType.Terran_Missile_Turret));
+//            }
+//        }
 
     }
 }

@@ -6,7 +6,7 @@ import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
 import com.yangky.scbotdemo.bwem.build.BuildExecutor;
-import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
+import com.yangky.scbotdemo.bwem.build.RegionStrategy;
 import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 
@@ -144,17 +144,17 @@ public class WallOffExecutor {
                 }
                 if (BuildExecutor.getTaskByIdempotent(e.getIdempotentNo()) == null && e.getBuildTiming().accept(Games.game)) {
                     System.out.println("建造堵口建筑: " + e.getIdempotentNo() + " - " + e.getUnitType() + " at " + e.getTilePosition());
-                    if (e.getTilePosition() == null) {
-                        List<RegionType> regionTypes = new ArrayList<>();
-                        regionTypes.add(RegionType.EDGE);
-                        e.setTilePosition(BuildingPlacer.findPosition(e.getUnitType(), regionTypes, 0, 0, true));
-                    }
-                    BuildExecutor.add(Task.of(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
+                    Task task = Task.of(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType());
+                    task.setBuildTiming(e.getBuildTiming());
+                    RegionStrategy strategy = RegionStrategy.forTypes(RegionType.EDGE);
+                    task.setRegionStrategy(strategy);
+                    task.setCallback(() -> {
                         if (e.getCallback() != null) {
                             e.getCallback().execute();
                         }
                         markBuildingCompleted(e.getIdempotentNo());
-                    }));
+                    });
+                    BuildExecutor.add(task);
                 }
             });
         }

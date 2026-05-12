@@ -77,7 +77,7 @@ public class ConstructingHandler extends StateHandler {
         // 标记为有经验建筑师，并让它回到基地附近
         Workers.markAsExperiencedBuilder(task.getWorker());
         Unit worker = task.getWorker();
-        if (worker.getOrder() == Order.ConstructingBuilding || worker.getOrder() == Order.ResetCollision) {
+        if (worker.getOrder() == Order.ConstructingBuilding) {
             return;
         }
         // ✅ 清除卡住记录，避免误判
@@ -89,10 +89,7 @@ public class ConstructingHandler extends StateHandler {
         TilePosition target = new TilePosition(central.getX() + randomX - 5, central.getY() + randomY - 5);
         worker.rightClick(target.toPosition());
         Workers.goGatherLessLoader(worker, Bases.getMainBaseUnit());
-//        boolean moved = Actions.smartMove(worker, target);
-        System.out.println("建造完毕 scv回到集结点: " + target
-                + ", 工人ID: " + worker.getID()
-                + ", 工人当前Order: " + worker.getOrder());
+        System.out.println("建造完毕 task=" + task.getIdempotentNo() + ",  pos=" + target);
         // 执行回调（如果有）
         if (Objects.nonNull(task.callback)) {
             System.out.println("执行回调: " + task.getIdempotentNo());

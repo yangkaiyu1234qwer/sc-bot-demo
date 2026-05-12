@@ -7,9 +7,10 @@ import bwapi.UpgradeType;
 import com.yangky.scbotdemo.bwem.Bases;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
-import com.yangky.scbotdemo.bwem.build.BuildExecutor;
-import com.yangky.scbotdemo.bwem.build.Task;
-import com.yangky.scbotdemo.util.Positions;
+import com.yangky.scbotdemo.bwem.build.BuildingDemand;
+import com.yangky.scbotdemo.bwem.build.BuildingDemandManager;
+import com.yangky.scbotdemo.bwem.build.RegionStrategy;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
@@ -46,20 +47,25 @@ public class OnFrameForAirUpgrade extends OnFrame {
         long completedArmories = Units.getSelfUnits(UnitType.Terran_Armory).stream()
                 .filter(Unit::isCompleted)
                 .count();
-        long buildingArmories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Armory);
-        long armoryCount = completedArmories + buildingArmories;
-
-        // 目标：造 2 个 Armory
-        if (armoryCount < 2) {
-            for (long i = armoryCount; i < 2; i++) {
-                // 使用 EdgePosition，Armory 通常放在边缘或腹地
-                bwapi.TilePosition pos = Positions.getEdgePosition(UnitType.Terran_Armory, base);
-                if (pos != null) {
-//                    Builds.add(new BuildTask("armory_" + (i + 1), pos, UnitType.Terran_Armory, null));
-                    BuildExecutor.add(Task.of("armory_" + (i + 1), pos, UnitType.Terran_Armory));
-                }
-            }
+        if (completedArmories < 2) {
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.EDGE, RegionType.CENTRAL);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Armory, 2, strategy);
+            BuildingDemandManager.declare(demand);
         }
+//        long buildingArmories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Armory);
+//        long armoryCount = completedArmories + buildingArmories;
+//
+//        // 目标：造 2 个 Armory
+//        if (armoryCount < 2) {
+//            for (long i = armoryCount; i < 2; i++) {
+//                // 使用 EdgePosition，Armory 通常放在边缘或腹地
+//                bwapi.TilePosition pos = Positions.getEdgePosition(UnitType.Terran_Armory, base);
+//                if (pos != null) {
+////                    Builds.add(new BuildTask("armory_" + (i + 1), pos, UnitType.Terran_Armory, null));
+//                    BuildExecutor.add(Task.of("armory_" + (i + 1), pos, UnitType.Terran_Armory));
+//                }
+//            }
+//        }
 
         // ==================== 2. 升级空军攻防 ====================
         // 只有当 Armory 建好后才能升级
@@ -84,13 +90,44 @@ public class OnFrameForAirUpgrade extends OnFrame {
                         });
             }
             // 升级空军防御
-            else if (airDefenseLevel < maxLevel) {
+            if (airDefenseLevel < maxLevel) {
                 armories.stream()
                         .filter(e -> e.isCompleted() && e.isIdle())
                         .findFirst()
                         .ifPresent(armory -> {
                             armory.upgrade(UpgradeType.Terran_Ship_Plating);
                             System.out.println("[AirUpgrade] 开始升级空军防御: Level " + (airDefenseLevel + 1));
+                        });
+            }
+        }
+
+        // ==================== 3. 升级机枪兵攻防 ====================
+        Set<Unit> engineeringBays = Units.getSelfUnits(UnitType.Terran_Engineering_Bay).stream()
+                .filter(Unit::isCompleted)
+                .collect(Collectors.toSet());
+        if (!engineeringBays.isEmpty()) {
+            // 获取当前升级等级
+            int vehicleAttackLevel = self.getUpgradeLevel(UpgradeType.Terran_Vehicle_Weapons);
+            int vehicleDefenseLevel = self.getUpgradeLevel(UpgradeType.Terran_Vehicle_Plating);
+            // 最大升级等级通常是 3
+            int maxLevel = 3;
+            // 升级
+            if (vehicleAttackLevel < maxLevel) {
+                engineeringBays.stream()
+                        .filter(e -> e.isCompleted() && e.isIdle())
+                        .findFirst()
+                        .ifPresent(bay -> {
+                            bay.upgrade(UpgradeType.Terran_Vehicle_Weapons);
+                            System.out.println("[AirUpgrade] 开始升级机枪兵攻击: Level " + (vehicleAttackLevel + 1));
+                        });
+            }
+            if (vehicleDefenseLevel < maxLevel) {
+                engineeringBays.stream()
+                        .filter(e -> e.isCompleted() && e.isIdle())
+                        .findFirst()
+                        .ifPresent(bay -> {
+                            bay.upgrade(UpgradeType.Terran_Vehicle_Plating);
+                            System.out.println("[AirUpgrade] 开始升级机枪兵防御: Level " + (vehicleDefenseLevel + 1));
                         });
             }
         }

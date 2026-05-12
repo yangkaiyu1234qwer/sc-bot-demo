@@ -1,18 +1,20 @@
 package com.yangky.scbotdemo.onframe;
 
 
-import bwapi.*;
+import bwapi.Player;
+import bwapi.TechType;
+import bwapi.Unit;
+import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Bases;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
 import com.yangky.scbotdemo.bwem.build.BuildExecutor;
-import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
-import com.yangky.scbotdemo.bwem.build.Task;
+import com.yangky.scbotdemo.bwem.build.BuildingDemand;
+import com.yangky.scbotdemo.bwem.build.BuildingDemandManager;
+import com.yangky.scbotdemo.bwem.build.RegionStrategy;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -46,14 +48,9 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long starportCount = completedStarports + buildingStarports;
 
         if (starportCount < 5) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.CENTRAL);
-            regionTypes.add(RegionType.EDGE);
-            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Starport, regionTypes, 3, 0, true);
-            if (pos != null) {
-                String taskId = "starport_" + (starportCount + 1);
-                BuildExecutor.add(Task.of(taskId, pos, UnitType.Terran_Starport));
-            }
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.CENTRAL, RegionType.EDGE);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Starport, 5, strategy, 3, 1, true);
+            BuildingDemandManager.declare(demand);
         }
 
         // ==================== 2. 挂附件 (Control Tower) ====================
@@ -73,12 +70,15 @@ public class OnFrameForBattleCruiser extends OnFrame {
         long buildingFacilities = BuildExecutor.getCountByBuildingType(UnitType.Terran_Science_Facility);
         long facilityCount = completedFacilities + buildingFacilities;
         if (facilityCount < 1) {
-            List<RegionType> regionTypes = new ArrayList<>();
-            regionTypes.add(RegionType.CENTRAL);
-            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Science_Facility, regionTypes, 1, 1, true);
-//            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, Locations.getCentralAreaCenter().toPosition().toTilePosition());
-//            Builds.add(new BuildTask("facility_1", pos, UnitType.Terran_Science_Facility, null));
-            BuildExecutor.add(Task.of("facility_1", pos, UnitType.Terran_Science_Facility));
+//            List<RegionType> regionTypes = new ArrayList<>();
+//            regionTypes.add(RegionType.CENTRAL);
+//            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Science_Facility, regionTypes, 1, 1, true);
+////            TilePosition pos = Positions.getCentralPosition(UnitType.Terran_Science_Facility, Locations.getCentralAreaCenter().toPosition().toTilePosition());
+////            Builds.add(new BuildTask("facility_1", pos, UnitType.Terran_Science_Facility, null));
+//            BuildExecutor.add(Task.of("facility_1", pos, UnitType.Terran_Science_Facility));
+            RegionStrategy strategy = RegionStrategy.forTypes(RegionType.EDGE, RegionType.CENTRAL);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Science_Facility, 1, strategy, 3, 1, true);
+            BuildingDemandManager.declare(demand);
         }
 
         // ==================== 3. 造科学研究院 (Physics Lab) ====================

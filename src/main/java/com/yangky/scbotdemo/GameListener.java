@@ -6,12 +6,12 @@ import bwapi.Game;
 import bwapi.Unit;
 import com.yangky.scbotdemo.bwem.*;
 import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
 import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
 import com.yangky.scbotdemo.bwem.walloff.WallOffExecutor;
 import com.yangky.scbotdemo.listner.created.UnitCreatedListenerChain;
 import com.yangky.scbotdemo.listner.destroy.UnitDestroyListenerChain;
 import com.yangky.scbotdemo.onframe.OnFrameChain;
-import com.yangky.scbotdemo.util.Positions;
 import com.yangky.scbotdemo.util.Printer;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -203,7 +203,7 @@ public class GameListener extends DefaultBWListener implements CommandLineRunner
         Actions.clearWorkerTracking();
         System.out.println("[清理] 工人移动追踪已清理");
 
-        Positions.resetFailedPositions();
+        BuildingPlacer.resetFailedPositions();
         RegionsClassifier.clear();
 
         System.out.println("[清理] 资源清理完成\n");

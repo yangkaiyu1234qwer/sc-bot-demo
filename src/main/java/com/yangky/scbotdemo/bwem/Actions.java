@@ -18,6 +18,7 @@ public class Actions {
 
     private static final Map<Integer, Position> lastPositions = new HashMap<>();
     private static final Map<Integer, Integer> stuckFrames = new HashMap<>();
+    private static final Map<Integer, java.util.Set<Position>> attemptedDetours = new HashMap<>();
 
 
     /**
@@ -32,26 +33,27 @@ public class Actions {
             return false;
         }
 
-        if (checkStuck(unit, target)) {
+        if (checkStuck(unit)) {
             System.out.println("[DEBUG] 检测到工人卡住，执行强制脱离: " + unit.getID());
             forceBreakFree(unit);
             return true;
         }
 
-        Unit blockingGeyser = findBlockingGeyser(unit, target);
+        // 只有靠近障碍物时才检测并绕行
+        Unit blockingGeyser = findNearbyBlockingGeyser(unit, target);
         if (blockingGeyser != null) {
             Position detourPos = calculateDetourPosition(unit.getPosition(), blockingGeyser.getPosition(), target);
             if (isValidPosition(detourPos)) {
-                System.out.println("[DEBUG] 检测到气矿" + blockingGeyser.getTilePosition() + "阻挡，绕行至: " + detourPos.toTilePosition());
+                System.out.println("[DEBUG] 靠近气矿" + blockingGeyser.getTilePosition() + "，绕行至: " + detourPos.toTilePosition());
                 return unit.rightClick(detourPos);
             }
         }
 
-        Unit blockingBuilding = findBlockingBuilding(unit, target);
+        Unit blockingBuilding = findNearbyBlockingBuilding(unit, target);
         if (blockingBuilding != null) {
             Position detourPos = calculateDetourPosition(unit.getPosition(), blockingBuilding.getPosition(), target);
             if (isValidPosition(detourPos)) {
-                System.out.println("[DEBUG] 检测到建筑" + blockingBuilding.getTilePosition() + "阻挡 建筑类型=" + blockingBuilding.getType() + ", position=" + target.toTilePosition() + "，绕行至: " + detourPos.toTilePosition());
+                System.out.println("[DEBUG] 靠近建筑" + blockingBuilding.getTilePosition() + " 建筑类型=" + blockingBuilding.getType() + ", position=" + target.toTilePosition() + "，绕行至: " + detourPos.toTilePosition());
                 return unit.rightClick(detourPos);
             }
         }
@@ -95,6 +97,63 @@ public class Actions {
                 .orElse(null);
     }
 
+    /**
+     * 查找附近是否有气矿阻挡（只在近距离检测）
+     */
+    private static Unit findNearbyBlockingGeyser(Unit unit, Position target) {
+        Position unitPos = unit.getPosition();
+
+        return Games.game.getAllUnits().stream()
+                .filter(u -> u.getType() == UnitType.Resource_Vespene_Geyser)
+                .filter(u -> {
+                    // 计算单位到气矿的距离
+                    double distanceToGeyser = unitPos.getDistance(u.getPosition());
+
+                    // 只有在很近距离（64像素，约2个Tile）才检测
+                    // 这个距离应该是单位的碰撞体积 + 安全余量
+                    if (distanceToGeyser > 64) {
+                        return false;
+                    }
+
+                    // 确认气矿确实在前进方向上（避免绕后）
+                    double distanceToTarget = unitPos.getDistance(target);
+                    double geyserToTarget = u.getPosition().getDistance(target);
+
+                    // 如果经过气矿更接近目标，才需要绕行
+                    return geyserToTarget < distanceToTarget;
+                })
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * 查找附近是否有建筑阻挡（只在近距离检测）
+     */
+    private static Unit findNearbyBlockingBuilding(Unit unit, Position target) {
+        Position unitPos = unit.getPosition();
+
+        return Games.game.getAllUnits().stream()
+                .filter(u -> u.getType().isBuilding())
+                .filter(u -> u.isCompleted() || u.isBeingConstructed())
+                .filter(u -> {
+                    // 计算单位到建筑的距离
+                    double distanceToBuilding = unitPos.getDistance(u.getPosition());
+
+                    // 只有在近距离（48像素，约1.5个Tile）才检测
+                    if (distanceToBuilding > 48) {
+                        return false;
+                    }
+
+                    // 确认建筑在前进方向上
+                    double distanceToTarget = unitPos.getDistance(target);
+                    double buildingToTarget = u.getPosition().getDistance(target);
+
+                    return buildingToTarget < distanceToTarget;
+                })
+                .findFirst()
+                .orElse(null);
+    }
+
     private static boolean isValidPosition(Position pos) {
         if (pos == null) {
             return false;
@@ -107,6 +166,7 @@ public class Actions {
 
     /**
      * 检查点是否在直线路径上（带容差）
+     * @deprecated 不再使用远距离路径检测，改用近距离碰撞检测
      */
     public static boolean isOnPath(Position start, Position point, Position end, double tolerance) {
         double dx = end.getX() - start.getX();
@@ -124,7 +184,7 @@ public class Actions {
         return distance <= tolerance;
     }
 
-    private static boolean checkStuck(Unit unit, Position target) {
+    private static boolean checkStuck(Unit unit) {
         int unitId = unit.getID();
         Position currentPos = unit.getPosition();
 
@@ -157,31 +217,161 @@ public class Actions {
         double toTargetX = target.getX() - currentPos.getX();
         double toTargetY = target.getY() - currentPos.getY();
 
-        // ✅ 随机选择横向或纵向绕行（50% 概率）
-        boolean useHorizontal = Math.random() < 0.5;
+        // 策略1：尝试横向和纵向绕行
+        Position leftDetour = calculateHorizontalDetour(obstaclePos, -DETOUR_DISTANCE);
+        Position rightDetour = calculateHorizontalDetour(obstaclePos, DETOUR_DISTANCE);
+        Position upDetour = calculateVerticalDetour(obstaclePos, -DETOUR_DISTANCE);
+        Position downDetour = calculateVerticalDetour(obstaclePos, DETOUR_DISTANCE);
 
-        if (useHorizontal) {
-            Position horizontalDetour = calculateHorizontalDetour(obstaclePos, toTargetX);
-            if (horizontalDetour != null) {
-                return horizontalDetour;
+        int leftScore = leftDetour != null ? evaluateClearance(leftDetour) : -1;
+        int rightScore = rightDetour != null ? evaluateClearance(rightDetour) : -1;
+        int upScore = upDetour != null ? evaluateClearance(upDetour) : -1;
+        int downScore = downDetour != null ? evaluateClearance(downDetour) : -1;
+
+        int maxScore = Math.max(Math.max(leftScore, rightScore), Math.max(upScore, downScore));
+
+        if (maxScore > 0) {
+            // 在得分相同的情况下，优先选择朝向目标的方向
+            if (leftScore == maxScore && rightScore == maxScore) {
+                return toTargetX >= 0 ? rightDetour : leftDetour;
             }
-            // 如果横向失败，尝试纵向
-            return calculateVerticalDetour(obstaclePos, toTargetY);
-        } else {
-            Position verticalDetour = calculateVerticalDetour(obstaclePos, toTargetY);
-            if (verticalDetour != null) {
-                return verticalDetour;
+            if (upScore == maxScore && downScore == maxScore) {
+                return toTargetY >= 0 ? downDetour : upDetour;
             }
-            // 如果纵向失败，尝试横向
-            return calculateHorizontalDetour(obstaclePos, toTargetX);
+
+            if (leftScore == maxScore) return leftDetour;
+            if (rightScore == maxScore) return rightDetour;
+            if (upScore == maxScore) return upDetour;
+            if (downScore == maxScore) return downDetour;
         }
+
+        // 策略2：如果直接绕行失败，尝试后退+横向偏移（V字形绕行）
+        Position vShapeDetour = calculateVShapeDetour(currentPos, obstaclePos, target);
+        if (isValidPosition(vShapeDetour)) {
+            return vShapeDetour;
+        }
+
+        return null;
+    }
+
+    /**
+     * 智能计算绕行位置，支持多次尝试不同距离
+     */
+    private static Position calculateSmartDetourPosition(Unit unit, Position obstaclePos, Position target) {
+        int unitId = unit.getID();
+
+        // 初始化尝试记录
+        if (!attemptedDetours.containsKey(unitId)) {
+            attemptedDetours.put(unitId, new java.util.HashSet<>());
+        }
+
+        java.util.Set<Position> attempted = attemptedDetours.get(unitId);
+
+        // 尝试多个绕行距离（从小到大）
+        int[] detourDistances = {96, 128, 160, 192};
+
+        for (int distance : detourDistances) {
+            // 计算四个方向的绕行点
+            java.util.List<Position> candidates = new java.util.ArrayList<>();
+            candidates.add(calculateHorizontalDetour(obstaclePos, -distance));
+            candidates.add(calculateHorizontalDetour(obstaclePos, distance));
+            candidates.add(calculateVerticalDetour(obstaclePos, -distance));
+            candidates.add(calculateVerticalDetour(obstaclePos, distance));
+
+            // 评估并排序候选点
+            for (Position candidate : candidates) {
+                if (isValidPosition(candidate) && !attempted.contains(candidate)) {
+                    int clearance = evaluateClearance(candidate);
+                    if (clearance > 0) {
+                        // 检查候选点是否更接近目标
+                        double distToTarget = candidate.getDistance(target);
+                        if (distToTarget < obstaclePos.getDistance(target) + distance) {
+                            attempted.add(candidate);
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 如果所有标准绕行都失败，尝试V字形绕行
+        Position vShapeDetour = calculateVShapeDetour(unit.getPosition(), obstaclePos, target);
+        if (isValidPosition(vShapeDetour) && !attempted.contains(vShapeDetour)) {
+            attempted.add(vShapeDetour);
+            return vShapeDetour;
+        }
+
+        // 清除历史记录，允许重新尝试（防止永久无法绕行）
+        if (attempted.size() > 20) {
+            attempted.clear();
+            System.out.println("[DEBUG] 绕行尝试次数过多，清除历史记录");
+        }
+
+        return null;
+    }
+
+
+    /**
+     * V字形绕行：后退 + 横向偏移
+     */
+    private static Position calculateVShapeDetour(Position currentPos, Position obstaclePos, Position target) {
+        // 计算从障碍物到当前点的方向（后退方向）
+        double backDx = currentPos.getX() - obstaclePos.getX();
+        double backDy = currentPos.getY() - obstaclePos.getY();
+
+        // 归一化
+        double distance = Math.sqrt(backDx * backDx + backDy * backDy);
+        if (distance == 0) {
+            return null;
+        }
+
+        backDx /= distance;
+        backDy /= distance;
+
+        // 计算垂直于后退方向的横向向量
+        double lateralDx = -backDy;  // 旋转90度
+        double lateralDy = backDx;
+
+        // 后退距离（32像素）+ 横向偏移（48像素）
+        int backDistance = 32;
+        int lateralDistance = 48;
+
+        int newX = currentPos.getX() + (int) (backDx * backDistance + lateralDx * lateralDistance);
+        int newY = currentPos.getY() + (int) (backDy * backDistance + lateralDy * lateralDistance);
+
+        int mapWidth = Games.game.mapWidth() * 32;
+        int mapHeight = Games.game.mapHeight() * 32;
+
+        newX = Math.max(0, Math.min(newX, mapWidth));
+        newY = Math.max(0, Math.min(newY, mapHeight));
+
+        Position pos = new Position(newX, newY);
+        return isValidPosition(pos) ? pos : null;
+    }
+
+    /**
+     * 评估某个位置的通畅程度（周围可通行的格子数）
+     */
+    private static int evaluateClearance(Position pos) {
+        int clearance = 0;
+        int checkRadius = 64; // 检查范围（像素）
+        int step = 32; // 检查步长（1个Tile）
+
+        for (int dx = -checkRadius; dx <= checkRadius; dx += step) {
+            for (int dy = -checkRadius; dy <= checkRadius; dy += step) {
+                Position checkPos = new Position(pos.getX() + dx, pos.getY() + dy);
+                if (isValidPosition(checkPos)) {
+                    clearance++;
+                }
+            }
+        }
+        return clearance;
     }
 
     /**
      * 计算横向绕行点（左右绕行）
      */
-    private static Position calculateHorizontalDetour(Position obstaclePos, double toTargetX) {
-        int detourX = toTargetX >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
+    private static Position calculateHorizontalDetour(Position obstaclePos, int detourX) {
         int newX = obstaclePos.getX() + detourX;
         int newY = obstaclePos.getY();
 
@@ -198,8 +388,7 @@ public class Actions {
     /**
      * 计算纵向绕行点（上下绕行）
      */
-    private static Position calculateVerticalDetour(Position obstaclePos, double toTargetY) {
-        int detourY = toTargetY >= 0 ? DETOUR_DISTANCE : -DETOUR_DISTANCE;
+    private static Position calculateVerticalDetour(Position obstaclePos, int detourY) {
         int newX = obstaclePos.getX();
         int newY = obstaclePos.getY() + detourY;
 
@@ -213,10 +402,10 @@ public class Actions {
         return isValidPosition(pos) ? pos : null;
     }
 
-
     public static void forceBreakFree(Unit unit) {
         int unitId = unit.getID();
         stuckFrames.put(unitId, 0);
+        attemptedDetours.remove(unitId);
 
         unit.stop();
 
@@ -288,11 +477,13 @@ public class Actions {
         if (unit != null) {
             lastPositions.remove(unit.getID());
             stuckFrames.remove(unit.getID());
+            attemptedDetours.remove(unit.getID());
         }
     }
 
     public static void clearWorkerTracking() {
         lastPositions.clear();
         stuckFrames.clear();
+        attemptedDetours.clear();
     }
 }

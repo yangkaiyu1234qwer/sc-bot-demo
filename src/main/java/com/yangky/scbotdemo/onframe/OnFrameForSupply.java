@@ -3,10 +3,10 @@ package com.yangky.scbotdemo.onframe;
 import bwapi.Player;
 import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Games;
+import com.yangky.scbotdemo.bwem.build.BuildingDemand;
 import com.yangky.scbotdemo.bwem.build.BuildingDemandManager;
 import com.yangky.scbotdemo.bwem.build.RegionStrategy;
 import com.yangky.scbotdemo.bwem.region.RegionType;
-import com.yangky.scbotdemo.bwem.walloff.WallOffExecutor;
 import com.yangky.scbotdemo.util.Maths;
 import com.yangky.scbotdemo.util.Properties;
 import com.yangky.scbotdemo.util.Times;
@@ -53,8 +53,9 @@ public class OnFrameForSupply extends OnFrame {
         int supplyTotal = player.supplyTotal();
         int supplyUsed = player.supplyUsed();
         if (Maths.mul(supplyUsed, 100) >= Maths.mul(supplyTotal, 75)) {
-            int demand = (int) (Maths.div(supplyTotal - 20, 16, 1, RoundingMode.CEILING) + 1);
-            BuildingDemandManager.declare(UnitType.Terran_Supply_Depot, demand, RegionStrategy.forTypes(RegionType.EDGE));
+            int require = (int) (Maths.div(supplyTotal, 16, 1, RoundingMode.FLOOR) + 1);
+            BuildingDemand demand = BuildingDemand.of(UnitType.Terran_Supply_Depot, require, RegionStrategy.forTypes(RegionType.EDGE), 1, 1, true);
+            BuildingDemandManager.declare(demand);
         }
     }
 

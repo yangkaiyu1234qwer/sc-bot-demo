@@ -1,20 +1,16 @@
 package com.yangky.scbotdemo.bwem.build.handler;
 
 import bwapi.TilePosition;
-import bwapi.UnitType;
+import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.LocationValidator;
 import com.yangky.scbotdemo.bwem.Units;
 import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
 import com.yangky.scbotdemo.bwem.build.StateHandler;
 import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.bwem.build.TaskStatus;
-import com.yangky.scbotdemo.bwem.region.RegionType;
-import com.yangky.scbotdemo.util.Positions;
 import lombok.Getter;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,42 +32,36 @@ public class AssignPositionHandler extends StateHandler {
 
     @Override
     public void process(Task task) {
+        boolean isWallOff = task.getIdempotentNo().startsWith("first") ||
+                task.getIdempotentNo().contains("second") ||
+                task.getIdempotentNo().contains("wall");
         synchronized (AssignPositionHandler.class) {
             if (task.getPosition() == null) {
-                TilePosition pos = null;
-                if (task.getBuildingType() == UnitType.Terran_Supply_Depot
-                        || task.getBuildingType() == UnitType.Terran_Engineering_Bay) {
-                    List<RegionType> regionTypeList = new ArrayList<>();
-                    regionTypeList.add(RegionType.BOUNDARY);
-                    regionTypeList.add(RegionType.EDGE);
-                    pos = BuildingPlacer.findPosition(task.getBuildingType(), regionTypeList, 0, 0, true);
-//                task.setPosition(Positions.getEdgePosition(task.getBuildingType(), Bases.getMainBaseUnit()));
-                } else if (task.getBuildingType() == UnitType.Terran_Missile_Turret) {
-                    List<RegionType> regionTypeList = new ArrayList<>();
-                    regionTypeList.add(RegionType.BOUNDARY);
-                    regionTypeList.add(RegionType.EDGE);
-                    regionTypeList.add(RegionType.MINERAL);
-                    pos = BuildingPlacer.findPosition(task.getBuildingType(), regionTypeList, 0, 0, false);
-                } else {
-//                task.setPosition(Positions.getCentralPosition(task.getBuildingType(), Bases.getMainBase().getLocation()));
-                    List<RegionType> regionTypeList = new ArrayList<>();
-                    regionTypeList.add(RegionType.CENTRAL);
-                    pos = BuildingPlacer.findPosition(task.getBuildingType(), regionTypeList, 0, 0, true);
+                // 选址（如果有策略）
+                TilePosition position = BuildingPlacer.findPosition(task);
+                if (position == null) {
+                    System.out.println("[DEBUG] 没有找到合适的位置 task=" + task.getIdempotentNo() + ", buildingType=" + task.getBuildingType());
                 }
-                task.setPosition(pos);
-            } else if (!LocationValidator.isValid(task.getPosition(), task.getBuildingType())) {
+                task.setPosition(position);
+            } else if (isWallOff && !Games.isBuildable(task.getPosition())) {
+                System.out.println("[ERROR] 堵口位置地形不可建造" + task.getPosition() + ", buildingType=" + task.getBuildingType());
+                BuildingPlacer.markFailedPosition(task.getPosition());
+                task.getWorker().stop();
+                task.setStatus(TaskStatus.FAILED);
+                return;
+            } else if (!LocationValidator.isValid(task.getPosition(), task)) {
                 if (Units.findBuildingAtPosition(task.getPosition(), null) != null) {
                     System.out.println("[DEBUG] 位置上已存在建筑 task=" + task.getIdempotentNo() + ", pos=" + task.getPosition());
                 } else {
                     System.out.println("[DEBUG] 位置不可建造 task=" + task.getIdempotentNo() + ", pos=" + task.getPosition());
                 }
-                Positions.markFailedPosition(task.getPosition());
+                BuildingPlacer.markFailedPosition(task.getPosition());
                 task.setPosition(null);
                 task.setStatus(TaskStatus.RETRYING);
                 return;
             }
             positionCache.put(task.getPosition(), task);
-            task.setStatus(TaskStatus.MOVING);
+            task.setStatus(TaskStatus.ASSIGN_SCV);
         }
     }
 

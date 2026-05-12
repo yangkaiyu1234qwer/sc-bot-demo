@@ -4,8 +4,6 @@ package com.yangky.scbotdemo.bwem.build;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yangky.scbotdemo.bwem.*;
 import com.yangky.scbotdemo.bwem.build.handler.AssignPositionHandler;
 import com.yangky.scbotdemo.bwem.region.RegionType;
@@ -24,112 +22,45 @@ import java.util.stream.Collectors;
 public class BuildingPlacer {
 
     private static final int DEFAULT_SEARCH_RADIUS = 30; // 默认搜索半径
-    // 使用缓存记录最近提供的坐标，防止并发冲突，缓存有效时间15秒
-    private static final Cache<TilePosition, TilePosition> cache = Caffeine.newBuilder()
-            .maximumSize(15000)
-            .expireAfterWrite(1, java.util.concurrent.TimeUnit.MINUTES)
-            .build();
+    private static final Set<String> failedPositions = new HashSet<>(); // 记录已尝试过但失败的位置
 
-    /**
-     * 在指定区域内寻找合适的建筑位置（使用默认参数）
-     *
-     * @param building   建筑类型
-     * @param regionType 目标区域类型
-     * @return 合适的 TilePosition，如果找不到返回 null
-     */
-    public static TilePosition findPosition(UnitType building, RegionType regionType) {
-        return findPosition(building, regionType, 0, 0, null, true);
-    }
 
-    /**
-     * 在指定区域内寻找合适的建筑位置（支持偏移量）
-     *
-     * @param building   建筑类型
-     * @param regionType 目标区域类型
-     * @param xOffset    X方向额外扩展的格子数（用于控制建筑间距）
-     * @param yOffset    Y方向额外扩展的格子数（用于控制建筑间距）
-     * @return 合适的 TilePosition，如果找不到返回 null
-     */
-    public static TilePosition findPosition(UnitType building, RegionType regionType, int xOffset, int yOffset) {
-        return findPosition(building, regionType, xOffset, yOffset, null, true);
-    }
-
-    /**
-     * 在指定区域内寻找合适的建筑位置（完整参数）
-     *
-     * @param building           建筑类型
-     * @param regionType         目标区域类型
-     * @param xOffset            X方向额外扩展的格子数（用于控制建筑间距）
-     * @param yOffset            Y方向额外扩展的格子数（用于控制建筑间距）
-     * @param fallbackRegions    备选区域列表（主区域找不到时尝试）
-     * @param allowBWAPIFallback 是否允许降级到 BWAPI 随机选择
-     * @return 合适的 TilePosition，如果找不到返回 null
-     */
-    public static TilePosition findPosition(UnitType building, RegionType regionType,
-                                            int xOffset, int yOffset,
-                                            List<RegionType> fallbackRegions,
-                                            boolean allowBWAPIFallback) {
-        if (building == null || regionType == null || !Locations.isInitialized()) {
+    public static synchronized TilePosition findPosition(Task task) {
+        UnitType building = task.getBuildingType();
+        RegionStrategy strategy = task.getRegionStrategy();
+        if (building == null || strategy == null || strategy.getRegions() == null || strategy.getRegions().isEmpty() || !Locations.isInitialized()) {
             return null;
         }
-        System.out.println("[BuildingPlacer] 开始选址 - 建筑: " + building
-                + ", 主区域: " + regionType
-                + ", 偏移量: (" + xOffset + ", " + yOffset + ")"
-                + ", 备选区域: " + (fallbackRegions != null ? fallbackRegions.size() : 0) + " 个"
-                + ", 允许BWAPI降级: " + allowBWAPIFallback);
-        // 构建区域优先级列表（主区域 + 备选区域）
-        List<RegionType> regionPriority = new ArrayList<>();
-        regionPriority.add(regionType);
-        if (fallbackRegions != null && !fallbackRegions.isEmpty()) {
-            regionPriority.addAll(fallbackRegions);
-        }
+        System.out.println("[BuildingPlacer] 开始选址 "
+                + ", task=" + task.getIdempotentNo()
+                + ", 区域: " + strategy.getRegions()
+                + ", 偏移量: (" + task.getXOffset() + ", " + task.getYOffset() + ")"
+                + ", 允许BWAPI降级: " + task.isAllowBWAPIFallback());
         TilePosition result = null;
         // 按优先级尝试各个区域
-        for (RegionType targetRegion : regionPriority) {
-            result = tryPlaceInRegion(building, targetRegion, xOffset, yOffset);
+        for (RegionType targetRegion : task.getRegionStrategy().getRegions()) {
+            result = tryPlaceInRegion(task, targetRegion);
             if (result != null) {
-                System.out.println("[BuildingPlacer] ✓ 在区域 " + targetRegion + " 找到位置: " + result);
+                System.out.println("[BuildingPlacer] ✓ 在区域 " + targetRegion + " 找到位置: " + result + ", task=" + task.getIdempotentNo());
             } else {
-                System.out.println("[BuildingPlacer] ✗ 在区域 " + targetRegion + " 未找到位置");
+                System.out.println("[BuildingPlacer] ✗ 在区域 " + targetRegion + " 未找到位置" + ", task=" + task.getIdempotentNo());
             }
         }
         // 所有区域都失败，考虑是否使用 BWAPI 兜底
-        if (result == null && allowBWAPIFallback) {
+        if (result == null && task.isAllowBWAPIFallback()) {
             TilePosition fallback = Games.game.getBuildLocation(building, Bases.getMainBase().getLocation(), DEFAULT_SEARCH_RADIUS);
             if (fallback != null) {
-                System.out.println("[BuildingPlacer] ⚠ 使用 BWAPI 兜底位置: " + fallback);
+                System.out.println("[BuildingPlacer] ⚠ 使用 BWAPI 兜底位置: " + fallback + ", task=" + task.getIdempotentNo());
                 result = fallback;
             }
         }
         if (result == null) {
-            System.out.println("[BuildingPlacer] ✗ 所有方案均失败，返回 null");
-        } else {
-            cache.put(result, result);
+            System.out.println("[BuildingPlacer] ✗ 所有方案均失败，返回 null" + ", task=" + task.getIdempotentNo());
         }
         return result;
     }
 
-    /**
-     * 在指定区域内寻找合适的建筑位置（多区域优先级，支持偏移量）
-     *
-     * @param building           建筑类型
-     * @param preferredRegions   优先区域列表（按优先级排序）
-     * @param xOffset            X方向额外扩展的格子数
-     * @param yOffset            Y方向额外扩展的格子数
-     * @param allowBWAPIFallback 是否允许降级到 BWAPI
-     * @return 合适的 TilePosition，如果找不到返回 null
-     */
-    public static TilePosition findPosition(UnitType building, List<RegionType> preferredRegions,
-                                            int xOffset, int yOffset, boolean allowBWAPIFallback) {
-        if (preferredRegions == null || preferredRegions.isEmpty()) {
-            return null;
-        }
-        RegionType primaryRegion = preferredRegions.get(0);
-        List<RegionType> fallbackRegions = preferredRegions.size() > 1 ? preferredRegions.subList(1, preferredRegions.size()) : null;
-        return findPosition(building, primaryRegion, xOffset, yOffset, fallbackRegions, allowBWAPIFallback);
-    }
-
-    private static synchronized TilePosition tryPlaceInRegion(UnitType building, RegionType regionType, int xOffset, int yOffset) {
+    private static synchronized TilePosition tryPlaceInRegion(Task task, RegionType regionType) {
         Set<TilePosition> regionPositions = Locations.getPositionsByRegion(regionType);
         if (regionPositions.isEmpty()) {
             return null;
@@ -149,23 +80,20 @@ public class BuildingPlacer {
         if (center == null) {
             center = Bases.getMainBaseUnit().getTilePosition();
         }
-
         if (regionType == RegionType.EDGE || regionType == RegionType.BOUNDARY) {
-            return directScanForEdgeOrMineral(building, regionPositions, xOffset, yOffset, center);
+            return directScanForEdgeOrMineral(task, regionPositions, center);
         }
-        return bfsSearch(building, center, regionPositions, xOffset, yOffset);
+        return bfsSearch(task, center, regionPositions);
     }
 
-    private static TilePosition directScanForEdgeOrMineral(UnitType building,
+    private static TilePosition directScanForEdgeOrMineral(Task task,
                                                            Set<TilePosition> regionPositions,
-                                                           int xOffset, int yOffset,
                                                            TilePosition referencePoint) {
-        int buildWidth = building.tileWidth() + xOffset;
-        int buildHeight = building.tileHeight() + yOffset;
+        int buildWidth = task.getBuildingType().tileWidth() + task.getXOffset();
+        int buildHeight = task.getBuildingType().tileHeight() + task.getYOffset();
         List<TilePosition> validCandidates = new ArrayList<>();
         for (TilePosition pos : regionPositions) {
-            if (canPlaceBuilding(pos, buildWidth, buildHeight, regionPositions, building)
-                    && !cache.asMap().containsKey(pos)) {
+            if (canPlaceBuilding(pos, task, buildWidth, buildHeight, regionPositions)) {
                 validCandidates.add(pos);
             }
         }
@@ -191,18 +119,14 @@ public class BuildingPlacer {
     /**
      * BFS 搜索合适的建筑位置
      *
-     * @param building        建筑类型
      * @param startPos        起始搜索点
      * @param regionPositions 区域内的所有位置集合
-     * @param xOffset         X方向额外扩展
-     * @param yOffset         Y方向额外扩展
      * @return 合适的 TilePosition
      */
-    private static TilePosition bfsSearch(UnitType building, TilePosition startPos,
-                                          Set<TilePosition> regionPositions,
-                                          int xOffset, int yOffset) {
-        int buildWidth = building.tileWidth() + xOffset;
-        int buildHeight = building.tileHeight() + yOffset;
+    private static TilePosition bfsSearch(Task task, TilePosition startPos,
+                                          Set<TilePosition> regionPositions) {
+        int buildWidth = task.getBuildingType().tileWidth() + task.getXOffset();
+        int buildHeight = task.getBuildingType().tileHeight() + task.getYOffset();
 
         // 记录已访问的位置
         Set<TilePosition> visited = new HashSet<>();
@@ -217,7 +141,7 @@ public class BuildingPlacer {
         while (!queue.isEmpty()) {
             TilePosition current = queue.poll();
             // 检查当前位置是否可以放下建筑（考虑偏移量）
-            if (canPlaceBuilding(current, buildWidth, buildHeight, regionPositions, building) && !cache.asMap().containsKey(current)) {
+            if (canPlaceBuilding(current, task, buildWidth, buildHeight, regionPositions)) {
                 return current;
             }
             // 向四个方向扩展
@@ -241,15 +165,14 @@ public class BuildingPlacer {
         return null;
     }
 
-    private static boolean canPlaceBuilding(TilePosition pos, int requiredWidth, int requiredHeight,
-                                            Set<TilePosition> regionPositions, UnitType building) {
-        if (!LocationValidator.isValid(pos, building)) {
+    private static boolean canPlaceBuilding(TilePosition current, Task task, int requiredWidth, int requiredHeight,
+                                            Set<TilePosition> regionPositions) {
+        if (!LocationValidator.isValid(current, task)) {
             return false;
         }
         for (int dx = 0; dx < requiredWidth; dx++) {
             for (int dy = 0; dy < requiredHeight; dy++) {
-                TilePosition tile = new TilePosition(pos.getX() + dx, pos.getY() + dy);
-
+                TilePosition tile = new TilePosition(current.getX() + dx, current.getY() + dy);
                 if (!regionPositions.contains(tile)) {
                     return false;
                 }
@@ -291,5 +214,21 @@ public class BuildingPlacer {
             return allPositions.get(new Random().nextInt(allPositions.size()));
         }
         return edgePositions.get(new Random().nextInt(edgePositions.size()));
+    }
+
+    /**
+     * 标记位置为失败
+     */
+    public static void markFailedPosition(TilePosition position) {
+        if (position != null) {
+            String posKey = position.getX() + "," + position.getY();
+            failedPositions.add(posKey);
+            System.out.println("[Positions] 标记失败位置: " + posKey);
+        }
+    }
+
+    public static void resetFailedPositions() {
+        failedPositions.clear();
+        System.out.println("[Positions] 已重置失败位置记录");
     }
 }

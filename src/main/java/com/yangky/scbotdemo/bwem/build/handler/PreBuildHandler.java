@@ -6,10 +6,10 @@ import com.yangky.scbotdemo.bwem.Actions;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.LocationValidator;
 import com.yangky.scbotdemo.bwem.Units;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
 import com.yangky.scbotdemo.bwem.build.StateHandler;
 import com.yangky.scbotdemo.bwem.build.Task;
 import com.yangky.scbotdemo.bwem.build.TaskStatus;
-import com.yangky.scbotdemo.util.Positions;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,21 +50,21 @@ public class PreBuildHandler extends StateHandler {
         if (isWallOff) {
             if (!Games.isBuildable(task.getPosition())) {
                 System.out.println("[ERROR] 堵口位置地形不可建造" + task.getPosition() + ", buildingType=" + task.getBuildingType());
-                Positions.markFailedPosition(task.getPosition());
+                BuildingPlacer.markFailedPosition(task.getPosition());
                 task.getWorker().stop();
                 task.setStatus(TaskStatus.FAILED);
                 return;
             }
         } else {
-            if (!LocationValidator.isValid(task.getPosition(), task.getBuildingType())) {
+            if (!LocationValidator.isValid(task.getPosition(), task)) {
                 System.out.println("[ERROR] 位置验证失败 buildPosition=" + task.getPosition() + ", buildingType=" + task.getBuildingType());
-                Positions.markFailedPosition(task.getPosition());
+                BuildingPlacer.markFailedPosition(task.getPosition());
                 task.getWorker().stop();
                 task.setStatus(TaskStatus.FAILED);
                 return;
             }
         }
-        if (task.getStatus() != TaskStatus.CONSTRUCTING &&!task.getWorker().build(task.getBuildingType(), task.getPosition())) {
+        if (task.getStatus() != TaskStatus.CONSTRUCTING && !task.getWorker().build(task.getBuildingType(), task.getPosition())) {
             System.out.println("[ERROR] 下达建造命令失败" + task.getPosition() + ", buildingType=" + task.getBuildingType());
         } else {
             System.out.println("成功下达建造命令,等待轮询确认" + task.getPosition() + ", buildingType=" + task.getBuildingType());

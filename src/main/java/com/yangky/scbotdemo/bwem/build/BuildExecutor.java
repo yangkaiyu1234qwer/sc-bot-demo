@@ -28,7 +28,7 @@ public class BuildExecutor {
         handlerList.add(handler);
     }
 
-    public static void add(Task task) {
+    public static synchronized void add(Task task) {
         System.out.println("[DEBUG] 尝试添加任务: " + task.getIdempotentNo() + ", 当前任务数: " + tasks.stream().filter(e -> e.getStatus() != TaskStatus.COMPLETED).count());
         // ✅ 幂等检查
         if (tasks.stream().anyMatch(e -> StringUtils.equals(e.getIdempotentNo(), task.getIdempotentNo()))) {

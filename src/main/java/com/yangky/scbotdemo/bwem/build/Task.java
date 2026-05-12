@@ -3,6 +3,7 @@ package com.yangky.scbotdemo.bwem.build;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
+import com.yangky.scbotdemo.BuildTiming;
 import com.yangky.scbotdemo.Callback;
 import lombok.Data;
 
@@ -15,7 +16,6 @@ import lombok.Data;
 @Data
 public class Task implements Comparable<Task> {
     private String idempotentNo;
-    private TilePosition position;
     private Unit worker;
     private UnitType buildingType;
     private long startTime;
@@ -23,6 +23,12 @@ public class Task implements Comparable<Task> {
     private int retryCount;
     private int priority;
     public Callback callback;
+    private TilePosition position;
+    private RegionStrategy regionStrategy;
+    private BuildTiming buildTiming;
+    private int xOffset;
+    private int yOffset;
+    private boolean allowBWAPIFallback;
 
     public boolean isExpired() {
         return System.currentTimeMillis() - startTime >= 45000;
@@ -63,15 +69,19 @@ public class Task implements Comparable<Task> {
         return task;
     }
 
-    public static Task of(String idempotentNo, TilePosition position, UnitType buildingType, Callback callback) {
+    public static Task of(String idempotentNo, BuildingDemand demand) {
         Task task = new Task();
         task.setIdempotentNo(idempotentNo);
-        task.setPosition(position);
-        task.setBuildingType(buildingType);
+        task.setPosition(demand.getPosition());
+        task.setBuildingType(demand.getBuildingType());
         task.setStartTime(System.currentTimeMillis());
         task.setStatus(TaskStatus.WAITING);
         task.setPriority(3);
-        task.setCallback(callback);
+        task.setCallback(demand.getCallback());
+        task.setXOffset(demand.getXOffset());
+        task.setYOffset(demand.getYOffset());
+        task.setAllowBWAPIFallback(demand.isAllowBWAPIFallback());
+        task.setRegionStrategy(demand.getRegionStrategy());
         return task;
     }
 }

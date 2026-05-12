@@ -2,9 +2,11 @@ package com.yangky.scbotdemo.onframe;
 
 import bwapi.Player;
 import bwapi.Unit;
+import com.yangky.scbotdemo.bwem.Actions;
 import com.yangky.scbotdemo.bwem.Bases;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Workers;
+import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
 import com.yangky.scbotdemo.util.Times;
 import org.springframework.stereotype.Component;
 
@@ -42,11 +44,15 @@ public class OnFrameForMinerals extends OnFrame {
         // 空闲农民采矿
         List<Unit> idleWorkers = self.getUnits().stream()
                 .filter(e -> e.getType().isWorker() && e.isIdle())
-                .filter(e -> !Workers.isBuilder(e))
-                .filter(e -> !Workers.isRepairer(e))
+//                .filter(e -> !Workers.isBuilder(e))
+//                .filter(e -> !Workers.isRepairer(e))
                 .collect(Collectors.toList());
         idleWorkers.forEach(e -> {
-            Workers.goGatherLessLoader(e, Bases.getNearestBase(e.getTilePosition()));
+            if (!Workers.isBuilder(e) && !Workers.isRepairer(e)) {
+                Workers.goGatherLessLoader(e, Bases.getNearestBase(e.getTilePosition()));
+            } else {
+                Actions.smartMove(e, RegionsClassifier.getCentralPosition());
+            }
         });
     }
 }

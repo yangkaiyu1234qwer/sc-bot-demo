@@ -1,9 +1,6 @@
 package com.yangky.scbotdemo.bwem.build;
 
-import bwapi.TilePosition;
 import bwapi.UnitType;
-import com.yangky.scbotdemo.BuildTiming;
-import com.yangky.scbotdemo.Callback;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
 
@@ -29,62 +26,14 @@ public class BuildingDemandManager {
 
     private static final Map<String, BuildingDemand> demands = new ConcurrentHashMap<>();
 
-    /**
-     * 声明建筑需求（基础版）
-     *
-     * @param type        建筑类型
-     * @param targetCount 目标数量
-     */
-    public static void declare(UnitType type, int targetCount) {
-        declare(type, targetCount, null, null, null);
-    }
-
-    /**
-     * 声明建筑需求（带选址策略）
-     *
-     * @param type           建筑类型
-     * @param targetCount    目标数量
-     * @param regionStrategy 选址策略（可选，null则使用默认）
-     */
-    public static void declare(UnitType type, int targetCount, RegionStrategy regionStrategy) {
-        declare(type, targetCount, regionStrategy, null, null);
-    }
-
-    /**
-     * 声明建筑需求（完整版）
-     *
-     * @param type           建筑类型
-     * @param targetCount    目标数量
-     * @param regionStrategy 选址策略（可选）
-     * @param buildTiming    建造时机判断（可选，null表示立即建造）
-     * @param callback       完成回调（可选）
-     */
-    public static void declare(UnitType type, int targetCount, RegionStrategy regionStrategy,
-                               BuildTiming buildTiming, Callback callback) {
-        declare(type, targetCount, regionStrategy, buildTiming, callback, 0, 0);
-    }
-
-    /**
-     * 声明建筑需求（完整版，带间距配置）
-     *
-     * @param type           建筑类型
-     * @param targetCount    目标数量
-     * @param regionStrategy 选址策略（可选）
-     * @param buildTiming    建造时机判断（可选，null表示立即建造）
-     * @param callback       完成回调（可选）
-     * @param xOffset        X方向间距扩展（默认0）
-     * @param yOffset        Y方向间距扩展（默认0）
-     */
-    public static void declare(UnitType type, int targetCount, RegionStrategy regionStrategy,
-                               BuildTiming buildTiming, Callback callback, int xOffset, int yOffset) {
-        if (type == null || targetCount <= 0) {
+    public static void declare(BuildingDemand demand) {
+        if (demand.getBuildingType() == null || demand.getTargetCount() <= 0) {
             return;
         }
-        String demandKey = generateDemandKey(type);
-        BuildingDemand demand = new BuildingDemand(type, targetCount,
-                regionStrategy, buildTiming, callback, xOffset, yOffset);
+        String demandKey = generateDemandKey(demand.getBuildingType());
         demands.put(demandKey, demand);
     }
+
     /**
      * 同步需求到任务（每帧调用）
      * <p>
@@ -137,32 +86,16 @@ public class BuildingDemandManager {
             if (BuildExecutor.getTaskByIdempotent(idempotentNo) != null) {
                 continue;
             }
-            // 选址（如果有策略）
-            TilePosition position = null;
-            if (demand.getRegionStrategy() != null) {
-                position = BuildingPlacer.findPosition(
-                        type,
-                        demand.getRegionStrategy().getRegions(),
-                        demand.getXOffset(),
-                        demand.getYOffset(),
-                        true
-                );
-                if (position == null) {
-                    System.out.println("[BuildingDemandManager] ⚠ 选址失败: " + type
-                            + "，等待下一帧重试");
-                    break;
-                }
-            }
             // 创建 Task（带或不带回调）
             Task task;
             if (demand.getCallback() != null) {
-                task = Task.of(idempotentNo, position, type, demand.getCallback());
+                task = Task.of(idempotentNo, demand);
             } else {
-                task = Task.of(idempotentNo, position, type);
+                task = Task.of(idempotentNo, demand);
             }
             BuildExecutor.add(task);
             System.out.println("[BuildingDemandManager] ✓ 创建任务: " + idempotentNo
-                    + " - " + type + " at " + position + " (offset: " + demand.getXOffset() + "," + demand.getYOffset() + ")");
+                    + " - " + type + " at " + demand.getPosition() + " (offset: " + demand.getXOffset() + "," + demand.getYOffset() + ")");
         }
     }
 
