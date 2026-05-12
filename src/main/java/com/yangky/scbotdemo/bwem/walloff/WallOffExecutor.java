@@ -6,8 +6,9 @@ import bwapi.UnitType;
 import com.yangky.scbotdemo.bwem.Games;
 import com.yangky.scbotdemo.bwem.Units;
 import com.yangky.scbotdemo.bwem.build.BuildExecutor;
+import com.yangky.scbotdemo.bwem.build.BuildingPlacer;
 import com.yangky.scbotdemo.bwem.build.Task;
-import com.yangky.scbotdemo.util.Positions;
+import com.yangky.scbotdemo.bwem.region.RegionType;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -30,11 +31,11 @@ public class WallOffExecutor {
             System.out.println("[堵口完成] ✓ 所有堵口建筑已建造完成！");
         }
         if (isBarracks(buildingId) && !rescueExecuted) {
-            long unbuiltBarracksCount = requiredBuildings.stream()
+            long unBuiltBarracksCount = requiredBuildings.stream()
                     .filter(WallOffExecutor::isBarracks)
                     .filter(id -> !completedBuildings.contains(id))
                     .count();
-            if (unbuiltBarracksCount == 0) {
+            if (unBuiltBarracksCount == 0) {
                 triggerRescue(buildingId);
             }
         }
@@ -51,7 +52,7 @@ public class WallOffExecutor {
             rescueBarracks = barracks;
             barracksLandPosition = barracks.getTilePosition();
             rescueWaitFrames = 0;
-
+            barracks.cancelTrain();
             if (barracks.lift()) {
                 System.out.println("[救援] 兵营已起飞");
             }
@@ -144,7 +145,11 @@ public class WallOffExecutor {
                 if (BuildExecutor.getTaskByIdempotent(e.getIdempotentNo()) == null && e.getBuildTiming().accept(Games.game)) {
                     System.out.println("建造堵口建筑: " + e.getIdempotentNo() + " - " + e.getUnitType() + " at " + e.getTilePosition());
                     if (e.getTilePosition() == null) {
-                        e.setTilePosition(Positions.getEdgePosition(e.getUnitType(), base, 0));
+                        List<RegionType> regionTypes = new ArrayList<>();
+                        regionTypes.add(RegionType.EDGE);
+                        regionTypes.add(RegionType.BOUNDARY);
+                        regionTypes.add(RegionType.CENTRAL);
+                        e.setTilePosition(BuildingPlacer.findPosition(e.getUnitType(), regionTypes, 3, 0, true));
                     }
                     BuildExecutor.add(Task.of(e.getIdempotentNo(), e.getTilePosition(), e.getUnitType(), () -> {
                         if (e.getCallback() != null) {

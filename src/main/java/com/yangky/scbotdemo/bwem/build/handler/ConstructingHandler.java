@@ -3,10 +3,7 @@ package com.yangky.scbotdemo.bwem.build.handler;
 import bwapi.Order;
 import bwapi.TilePosition;
 import bwapi.Unit;
-import com.yangky.scbotdemo.bwem.Actions;
-import com.yangky.scbotdemo.bwem.Games;
-import com.yangky.scbotdemo.bwem.Units;
-import com.yangky.scbotdemo.bwem.Workers;
+import com.yangky.scbotdemo.bwem.*;
 import com.yangky.scbotdemo.bwem.build.BuildExecutor;
 import com.yangky.scbotdemo.bwem.build.StateHandler;
 import com.yangky.scbotdemo.bwem.build.Task;
@@ -91,6 +88,7 @@ public class ConstructingHandler extends StateHandler {
         int randomY = new Random().nextInt(10);
         TilePosition target = new TilePosition(central.getX() + randomX - 5, central.getY() + randomY - 5);
         worker.rightClick(target.toPosition());
+        Workers.goGatherLessLoader(worker, Bases.getMainBaseUnit());
 //        boolean moved = Actions.smartMove(worker, target);
         System.out.println("建造完毕 scv回到集结点: " + target
                 + ", 工人ID: " + worker.getID()

@@ -103,7 +103,6 @@ public class OnFrameForSupplyFallback extends OnFrame {
 //                Builds.add(task);
             Task task = Task.ofSupplyDepot(taskId, null);
             List<RegionType> regionTypeList = new ArrayList<>();
-            regionTypeList.add(RegionType.BOUNDARY);
             regionTypeList.add(RegionType.EDGE);
             task.setPosition(BuildingPlacer.findPosition(UnitType.Terran_Supply_Depot, regionTypeList, 0, 0, true));
             BuildExecutor.add(task);

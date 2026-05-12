@@ -157,31 +157,24 @@ public class Actions {
         double toTargetX = target.getX() - currentPos.getX();
         double toTargetY = target.getY() - currentPos.getY();
 
-        // ✅ 尝试两个绕行方向：横向绕行和纵向绕行
-        Position horizontalDetour = calculateHorizontalDetour(obstaclePos, toTargetX);
-        Position verticalDetour = calculateVerticalDetour(obstaclePos, toTargetY);
+        // ✅ 随机选择横向或纵向绕行（50% 概率）
+        boolean useHorizontal = Math.random() < 0.5;
 
-        if (horizontalDetour == null && verticalDetour == null) {
-            return null;
+        if (useHorizontal) {
+            Position horizontalDetour = calculateHorizontalDetour(obstaclePos, toTargetX);
+            if (horizontalDetour != null) {
+                return horizontalDetour;
+            }
+            // 如果横向失败，尝试纵向
+            return calculateVerticalDetour(obstaclePos, toTargetY);
+        } else {
+            Position verticalDetour = calculateVerticalDetour(obstaclePos, toTargetY);
+            if (verticalDetour != null) {
+                return verticalDetour;
+            }
+            // 如果纵向失败，尝试横向
+            return calculateHorizontalDetour(obstaclePos, toTargetX);
         }
-
-        if (horizontalDetour == null) {
-            return verticalDetour;
-        }
-
-        if (verticalDetour == null) {
-            return horizontalDetour;
-        }
-
-        // ✅ 选择距离目标更近的绕行点
-        double distToHorizontal = horizontalDetour.getDistance(target);
-        double distToVertical = verticalDetour.getDistance(target);
-
-        System.out.println("[DEBUG] 绕行方案对比 - 横向: " + horizontalDetour.toTilePosition()
-                + " (距离:" + (int) distToHorizontal + "), 纵向: " + verticalDetour.toTilePosition()
-                + " (距离:" + (int) distToVertical + ")");
-
-        return distToHorizontal <= distToVertical ? horizontalDetour : verticalDetour;
     }
 
     /**

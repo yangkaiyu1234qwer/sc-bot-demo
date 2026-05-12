@@ -36,11 +36,13 @@ public class OnFrameForTank extends OnFrame {
         long buildingFactories = BuildExecutor.getCountByBuildingType(UnitType.Terran_Factory);
         long factoryCount = completedFactories + buildingFactories;
         if (self.minerals() >= 100 && self.gas() >= 50 && self.supplyUsed() >= 40) {
-            if (factoryCount < 2) {
-                List<RegionType> regionTypes = new ArrayList<>();
-                regionTypes.add(RegionType.CENTRAL);
-                TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 0, 2, true);
-                BuildExecutor.add(Task.of("factory_" + (factoryCount + 1), pos, UnitType.Terran_Factory));
+            List<RegionType> regionTypes = new ArrayList<>();
+            regionTypes.add(RegionType.CENTRAL);
+            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Factory, regionTypes, 3, 0, true);
+            if (factoryCount < 1) {
+                BuildExecutor.add(Task.of("factory_" + 1, pos, UnitType.Terran_Factory));
+            } else if (factoryCount < 2) {
+                BuildExecutor.add(Task.of("factory_" + 2, pos, UnitType.Terran_Factory));
             }
         }
         // 造BE

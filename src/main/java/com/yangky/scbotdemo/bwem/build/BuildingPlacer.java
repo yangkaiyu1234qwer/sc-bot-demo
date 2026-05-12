@@ -4,13 +4,16 @@ package com.yangky.scbotdemo.bwem.build;
 import bwapi.TilePosition;
 import bwapi.Unit;
 import bwapi.UnitType;
+import bwem.Base;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yangky.scbotdemo.bwem.*;
 import com.yangky.scbotdemo.bwem.region.RegionType;
 import com.yangky.scbotdemo.bwem.region.RegionsClassifier;
+import com.yangky.scbotdemo.util.Positions;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * BuildingPlacer - 建筑选址器
@@ -87,6 +90,8 @@ public class BuildingPlacer {
             result = tryPlaceInRegion(building, targetRegion, xOffset, yOffset);
             if (result != null) {
                 System.out.println("[BuildingPlacer] ✓ 在区域 " + targetRegion + " 找到位置: " + result);
+            } else {
+                System.out.println("[BuildingPlacer] ✗ 在区域 " + targetRegion + " 未找到位置");
             }
         }
         // 所有区域都失败，考虑是否使用 BWAPI 兜底
@@ -145,16 +150,25 @@ public class BuildingPlacer {
         if (regionType == RegionType.CENTRAL) {
             center = RegionsClassifier.getCentralPosition();
         } else if (regionType == RegionType.CHOKE_POINT) {
-            center = RegionsClassifier.getChokePointPosition();
+            Unit bunker = Units.getSelfUnits(UnitType.Terran_Bunker).stream().findFirst().orElse(null);
+            if (bunker == null) {
+                center = RegionsClassifier.getChokePointPosition();
+            } else {
+                center = new TilePosition(bunker.getTilePosition().getX(), bunker.getTilePosition().getY());
+            }
         }
         // 确定起始搜索点
         if (center == null) {
-            List<Unit> units = new ArrayList<>(Units.getSelfUnits(building));
-            if (!units.isEmpty()) {
-                Unit latest = units.get(units.size() - 1);
-                center = latest.getTilePosition();
-            } else {
+            List<TilePosition> list = RegionsClassifier.getPositions().stream()
+                    .map(e -> new TilePosition(e.getX(), e.getY()))
+                    .collect(Collectors.toList());
+            int random = (int) (Math.random() * list.size());
+            center = list.get(random);
+            if (center == null) {
                 center = getRandomEdgePosition(regionPositions);
+            }
+            if (center == null) {
+                center = Positions.getEdgePosition(building, Bases.getMainBaseUnit());
             }
         }
         // 执行 BFS 搜索
@@ -185,7 +199,7 @@ public class BuildingPlacer {
         visited.add(startPos);
 
         // 四个方向：上、下、左、右
-        int[][] directions = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+        int[][] directions = new int[][]{{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
 
         while (!queue.isEmpty()) {
             TilePosition current = queue.poll();
@@ -216,26 +230,30 @@ public class BuildingPlacer {
 
     private static boolean canPlaceBuilding(TilePosition pos, int requiredWidth, int requiredHeight,
                                             Set<TilePosition> regionPositions, UnitType building) {
-        // 检查建筑占据的所有格子（包括偏移量）
+        // ✅ 先验证起始位置是否合法（使用 LocationValidator）
+        if (!LocationValidator.isValid(pos, building)) {
+            return false;
+        }
+
+        // 检查建筑占据的所有格子（包括偏移量）是否在区域内且可建造
         for (int dx = 0; dx < requiredWidth; dx++) {
             for (int dy = 0; dy < requiredHeight; dy++) {
                 TilePosition tile = new TilePosition(pos.getX() + dx, pos.getY() + dy);
+
                 // 检查是否在区域内
                 if (!regionPositions.contains(tile)) {
                     return false;
                 }
-                // 检查是否可建造
+
+                // 检查是否可建造（只检查地形，不重复调用 isValid）
                 if (!Games.isBuildable(tile)) {
-                    return false;
-                }
-                // 检查是否有单位占用
-                if (!LocationValidator.isValid(tile, building)) {
                     return false;
                 }
             }
         }
         return true;
     }
+
 
     /**
      * 从边缘区域随机选择一个位置

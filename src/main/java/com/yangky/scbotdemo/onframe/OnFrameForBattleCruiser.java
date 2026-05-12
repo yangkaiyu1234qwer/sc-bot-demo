@@ -48,7 +48,8 @@ public class OnFrameForBattleCruiser extends OnFrame {
         if (starportCount < 5) {
             List<RegionType> regionTypes = new ArrayList<>();
             regionTypes.add(RegionType.CENTRAL);
-            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Starport, regionTypes, 0, 3, true);
+            regionTypes.add(RegionType.EDGE);
+            TilePosition pos = BuildingPlacer.findPosition(UnitType.Terran_Starport, regionTypes, 3, 0, true);
             if (pos != null) {
                 String taskId = "starport_" + (starportCount + 1);
                 BuildExecutor.add(Task.of(taskId, pos, UnitType.Terran_Starport));

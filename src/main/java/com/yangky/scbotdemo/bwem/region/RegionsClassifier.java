@@ -46,6 +46,7 @@ public class RegionsClassifier {
                     .map(Map.Entry::getValue)
                     .map(WallOff::getList)
                     .orElse(new ArrayList<>());
+            wallOffs = new ArrayList<>(wallOffs);
             if (wallOffs.stream().anyMatch(e -> e.getIdempotentNo().contains("secondBarrack"))) {
                 wallOffs.removeIf(e -> e.getIdempotentNo().contains("firstBarrack"));
             }
@@ -152,8 +153,8 @@ public class RegionsClassifier {
             default:
                 break;
         }
-        drawXMark(chokePointPosition.toPosition(), 8, new Color(255, 0, 0));
         drawXMark(centralPosition.toPosition(), 8, new Color(255, 0, 0));
+        drawXMark(chokePointPosition.toPosition(), 8, new Color(255, 0, 0));
     }
 
     /**
